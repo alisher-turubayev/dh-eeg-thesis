@@ -1,5 +1,8 @@
 # Adapted from https://github.com/github/gitignore
 
+# VSCode necessities
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
