@@ -1,5 +1,88 @@
-def main():
+import gin
+import argparse
+import torch
+import numpy as np
+
+from dataloader import SampleDataloader, MedeirosDataloader, MedeirosRawDataloader
+import train
+
+from datetime import datetime
+import logging
+import sys
+import os
+
+def parse_args(args):
     pass
 
-if __name__ == "__main__":
+@gin.configurable('run')
+def main(
+    fixed_seed = gin.REQUIRED,
+    cv_folds = gin.REQUIRED,
+    cv_repetitions = gin.REQUIRED,
+    dataset = gin.REQUIRED,
+    model_name = gin.REQUIRED
+):
+    # Take current time for logging
+    start_time = datetime.now()
+
+    # Define and create paths to store run data
+    logs_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'logs'
+    )
+    try:
+        os.makedirs(logs_dir, exist_ok = True)
+    except OSError as e:
+        sys.exit(f'Error creating checkpoint directory: {e}')
+
+    checkpoints_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'checkpoints'
+    )
+    try:
+        os.makedirs(checkpoints_dir, exist_ok = True)
+    except OSError as e:
+        sys.exit(f'Error creating checkpoint directory: {e}')
+
+    # Set up logging
+    logging.basicConfig(filename = os.path.join(logs_dir, f'{start_time}.log'), encoding = 'utf-8', level = logging.INFO)    
+    logging.info(f'Started program at {start_time}')
+
+    # Set fixed seed if needed
+    if fixed_seed is not None:
+        torch.manual_seed(fixed_seed)
+        np.random.seed(fixed_seed)
+        logging.info(f'Set fixed seed {fixed_seed}')
+
+    # Initialize the requested dataset
+    try:
+        gin.parse_config_file(f'configs/datasets/{dataset}_dataset.gin')
+    except:
+        logging.error(f'Dataset name not recognized: {dataset}')
+        sys.exit(1)
+
+    if dataset == 'sample':
+        loader = SampleDataloader()
+    elif dataset == 'medeiros':
+        loader = MedeirosDataloader()
+    elif dataset == 'medeiros_raw':
+        loader = MedeirosRawDataloader()
+    logging.info(f'Using dataset {dataset}')
+
+    # Start the model fit or training depending on requested model
+    if model_name in ['svm', 'xgboost']:
+        logging.info(f'Starting fit: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
+        train.fit(loader, model_name, cv_folds, cv_repetitions)
+    elif model_name in ['cnn', 'rnn']:
+        logging.info(f'Starting training: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
+        train.train_loop(loader, model_name, cv_folds, cv_repetitions)
+    else:
+        logging.error(f'Model name not recognized: {model_name}')
+        sys.exit(1)
+
+if __name__ == '__main__':
+    try:
+        gin.parse_config_file(f'configs/run/{sys.argv[1]}.gin')    
+    except:
+        sys.exit('Error parsing the configuration file.\nMake sure to specify the run configuration in the first argument, e.g. \'debug\'')
     main()

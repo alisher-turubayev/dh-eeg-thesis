@@ -1,0 +1,2 @@
+SampleDataset.path = './data/sample/data.csv'
+SampleDataset.n_segments = 0

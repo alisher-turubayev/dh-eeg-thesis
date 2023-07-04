@@ -1,0 +1,7 @@
+run.fixed_seed = 0
+
+run.cv_folds = 1
+run.cv_repetitions = 1
+
+run.dataset = 'sample'
+run.model_name = 'cnn'
