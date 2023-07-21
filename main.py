@@ -55,6 +55,13 @@ def main(
         np.random.seed(fixed_seed)
         logging.info(f'Set fixed seed {fixed_seed}')
 
+    # Determine if GPU acceleration is available
+    if torch.cuda.is_available(): 
+        dev = "cuda:0" 
+    else: 
+        dev = "cpu" 
+    device = torch.device(dev)
+
     # Read configuration files for dataset_name/model
     try:
         gin.parse_config_file(f'configs/datasets/{dataset_name}_dataset.gin')
@@ -64,11 +71,11 @@ def main(
         sys.exit(1)
 
     if dataset_name == 'sample':
-        dataset = SampleDataset()
+        dataset = SampleDataset(device)
     elif dataset_name == 'medeiros':
-        dataset = MedeirosDataset()
+        dataset = MedeirosDataset(device)
     elif dataset_name == 'peitek':
-        dataset = PeitekDataset()
+        dataset = PeitekDataset(device)
     logging.info(f'Using dataset_name {dataset_name}')
 
     """
@@ -91,7 +98,7 @@ def main(
         train.fit(dataset, model_name, cv_folds, cv_repetitions)
     else:
         logging.info(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions)
+        train.train_test_loop(device, dataset, model_name, epochs, cv_folds, cv_repetitions)
 
     wandb.finish()
 

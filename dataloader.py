@@ -12,7 +12,7 @@ class SampleDataset(Dataset):
     # Predefined features list for which to calculate second-order features
     NUMERIC_FEATURES = ['Attention', 'Mediation', 'Raw', 'Delta', 'Theta', 'Alpha1', 'Alpha2', 'Beta1', 'Beta2', 'Gamma1', 'Gamma2']
 
-    def __init__(self, path = gin.REQUIRED, n_segments = gin.REQUIRED):
+    def __init__(self, device, path = gin.REQUIRED, n_segments = gin.REQUIRED):
         super().__init__()
         self.path = path
         self._is_tabular = (n_segments != 0)
@@ -137,6 +137,7 @@ class SampleDataset(Dataset):
 class MedeirosDataset(Dataset):
     def __init__(
             self,
+            device,
             path = gin.REQUIRED,
             is_raw = gin.REQUIRED,
             window_size = gin.REQUIRED,
@@ -149,6 +150,7 @@ class MedeirosDataset(Dataset):
         self.window_size = window_size
         self.overlap_size = overlap_size
         self.sample_rate = sample_rate
+        self.device = device
 
         self._preprocess(self._load(path))
 
@@ -183,6 +185,10 @@ class MedeirosDataset(Dataset):
 
             data = torch.tensor(self.x.iloc[start_time:end_time, :].values)
             label = torch.tensor(self.y.iloc[start_time, :].values)
+
+            # Move to device
+            data = data.to(self.device)
+            label = label.to(self.device)
 
             # Cast both to tensor double type
             # Weird behaviour - not sure why .double() doesn't work but .float does

@@ -18,7 +18,7 @@ from models.rnn import RNNClassifier
 import xgboost as xgb
 
 @gin.configurable('train_params')
-def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, lr = 0.001, weight_decay = 0.01):
+def train_test_loop(device, dataset, model_name, epochs, cv_folds, cv_repetitions, lr = 0.001, weight_decay = 0.01):
     train_dataset, val_dataset = random_split(dataset, [0.7, 0.3])
 
     train_loader = DataLoader(train_dataset, batch_size = 4, shuffle = True)
@@ -28,6 +28,8 @@ def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, lr = 
         model = CNNClassifier()
     else: 
         model = RNNClassifier()
+    # Move to GPU if available
+    model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr = lr, weight_decay = weight_decay)
 
