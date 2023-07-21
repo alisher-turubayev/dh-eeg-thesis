@@ -4,6 +4,8 @@ import numpy as np
 from sklearn import preprocessing
 import torch
 from torch.utils.data import Dataset
+
+import logging
  
 @gin.configurable('SampleDataset')
 class SampleDataset(Dataset):
@@ -133,14 +135,69 @@ class SampleDataset(Dataset):
 
 @gin.configurable('MedeirosDataset')
 class MedeirosDataset(Dataset):
+    def __init__(
+            self,
+            path = gin.REQUIRED,
+            is_raw = gin.REQUIRED,
+            window_size = gin.REQUIRED,
+            overlap_size = gin.REQUIRED,
+            sample_rate = gin.REQUIRED
+            ):
+        super().__init__()
+        # Store all parameters 
+        self.is_raw = is_raw
+        self.window_size = window_size
+        self.overlap_size = overlap_size
+        self.sample_rate = sample_rate
+
+        self._preprocess(self._load(path))
+
+    def _load(self, path):
+        return pd.read_parquet(path, engine = 'fastparquet')
+
+    def _preprocess(self, df: pd.DataFrame):
+        if self.is_raw:
+            # Extract all label columns (one-hot encoded)
+            label_columns = [columns for columns in df.columns if columns.startswith('label')]
+
+            self.x = df.drop(label_columns, axis = 1)
+            self.y = df[label_columns]
+
+            if self.overlap_size == .0:
+                self.n_samples = int(self.x.shape[0] / (self.window_size * self.sample_rate))
+            else:
+                # TODO: no overlap calculations right now, add those
+                raise NotImplementedError()
+        else:
+            raise NotImplementedError()
+
     def __len__(self):
-        raise NotImplementedError()
+        return self.n_samples
     
     def __getitem__(self, idx):
-        raise NotImplementedError()
+        if self.is_raw:
+            # TODO: no overlap calculations right now, add those
+            # Calculate window boundaries
+            start_time = idx * self.window_size * self.sample_rate
+            end_time = start_time + self.window_size * self.sample_rate
+
+            data = torch.tensor(self.x.iloc[start_time:end_time, :].values)
+            label = torch.tensor(self.y.iloc[start_time, :].values)
+
+            # Cast both to tensor double type
+            # Weird behaviour - not sure why .double() doesn't work but .float does
+            data = data.float()
+            label = label.float()
+            # Transpose from [n_rows, n_cols] to [n_cols, n_rows] as second dim is # of channels
+            return torch.transpose(data, 0, 1), label
+        else:
+            raise NotImplementedError()
 
     def get_data(self):
-        raise NotImplementedError()
+        if self.is_raw:
+            raise TypeError('Dataset is not in tabular form')
+        else:
+            return self.x, self.y
 
 @gin.configurable('PeitekDataset')
 class PeitekDataset(Dataset):

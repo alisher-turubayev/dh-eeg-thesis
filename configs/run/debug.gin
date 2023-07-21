@@ -2,6 +2,7 @@ run.fixed_seed = 0
 
 run.cv_folds = 1
 run.cv_repetitions = 1
+run.epochs = 50
 
-run.dataset = 'sample'
+run.dataset_name = 'medeiros'
 run.model_name = 'cnn'

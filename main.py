@@ -16,10 +16,11 @@ def main(
     fixed_seed = gin.REQUIRED,
     cv_folds = gin.REQUIRED,
     cv_repetitions = gin.REQUIRED,
-    dataset = gin.REQUIRED,
+    epochs = gin.REQUIRED,
+    dataset_name = gin.REQUIRED,
     model_name = gin.REQUIRED
 ):
-    assert dataset in ['sample', 'medeiros', 'peitek'], f'Dataset name not recognized: {dataset}'
+    assert dataset_name in ['sample', 'medeiros', 'peitek'], f'Dataset name not recognized: {dataset_name}'
     assert model_name in ['svm', 'xgboost', 'cnn', 'rnn'], f'Model name not recognized: {model_name}'
 
     # Take current time for logging
@@ -54,21 +55,21 @@ def main(
         np.random.seed(fixed_seed)
         logging.info(f'Set fixed seed {fixed_seed}')
 
-    # Read configuration files for dataset/model
+    # Read configuration files for dataset_name/model
     try:
-        gin.parse_config_file(f'configs/datasets/{dataset}_dataset.gin')
+        gin.parse_config_file(f'configs/datasets/{dataset_name}_dataset.gin')
         gin.parse_config_file(f'configs/models/{model_name}.gin')
     except IOError as e:
         logging.error(f': Error reading gin configuration files: {e}')
         sys.exit(1)
 
-    if dataset == 'sample':
-        loader = SampleDataset()
-    elif dataset == 'medeiros':
-        loader = MedeirosDataset()
-    elif dataset == 'peitek':
-        loader = PeitekDataset()
-    logging.info(f'Using dataset {dataset}')
+    if dataset_name == 'sample':
+        dataset = SampleDataset()
+    elif dataset_name == 'medeiros':
+        dataset = MedeirosDataset()
+    elif dataset_name == 'peitek':
+        dataset = PeitekDataset()
+    logging.info(f'Using dataset_name {dataset_name}')
 
     """
     TODO: remove this comment once most of the work on development is done
@@ -78,7 +79,7 @@ def main(
             "fixed_seed": fixed_seed,
             "cv_folds": cv_folds,
             "cv_repetitions": cv_repetitions,
-            "dataset": dataset,
+            "dataset_name": dataset_name,
             "model_name": model_name
         }
     )
@@ -87,10 +88,10 @@ def main(
     # Start the model fit or training depending on requested model
     if model_name in ['svm', 'xgboost']:
         logging.info(f'Starting fit: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.fit(loader, model_name, cv_folds, cv_repetitions)
+        train.fit(dataset, model_name, cv_folds, cv_repetitions)
     else:
-        logging.info(f'Starting training: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.train_test_loop(loader, model_name, cv_folds, cv_repetitions)
+        logging.info(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
+        train.train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions)
 
     wandb.finish()
 

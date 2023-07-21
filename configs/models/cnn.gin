@@ -1,0 +1,6 @@
+CNNClassifier.input_size = 60
+CNNClassifier.n_layers = 5
+CNNClassifier.window_size = 2000
+CNNClassifier.kernel_size = 200
+CNNClassifier.hidden_size = 120
+CNNClassifier.output_size = 4

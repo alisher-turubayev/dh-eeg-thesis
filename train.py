@@ -7,7 +7,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.decomposition import PCA
 from sklearn.svm import LinearSVC
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
+import torch.nn.functional as F
+import torch.optim as optim
 import torch
 
 from models.cnn import CNNClassifier
@@ -16,24 +18,25 @@ from models.rnn import RNNClassifier
 import xgboost as xgb
 
 @gin.configurable('train_params')
-def train_test_loop(train_dataset, test_dataset, model_name, epochs, cv_folds, cv_repetitions, lr = gin.REQUIRED, weight_decay = gin.REQUIRED):
-    train_loader = DataLoader(train_dataset, batch_size = 4, shuffle = True)
-    val_loader = DataLoader(test_dataset, batch_size = 4, shuffle = False)
+def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, lr = 0.001, weight_decay = 0.01):
+    train_dataset, val_dataset = random_split(dataset, [0.7, 0.3])
 
-    optimizer = torch.optim.Adam(lr = lr, weight_decay = weight_decay)
+    train_loader = DataLoader(train_dataset, batch_size = 4, shuffle = True)
+    val_loader = DataLoader(val_dataset, batch_size = 4, shuffle = False)
 
     if model_name == 'cnn':
         model = CNNClassifier()
     else: 
         model = RNNClassifier()
 
-    loss_fn = torch.nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr = lr, weight_decay = weight_decay)
+
+    loss_fn = F.cross_entropy
 
     logging.info('--------------------')
     logging.info('Starting training...')
 
     for epoch in range(epochs):
-        
         running_loss = 0.
         running_loss_val = 0.
 
@@ -67,7 +70,7 @@ def train_test_loop(train_dataset, test_dataset, model_name, epochs, cv_folds, c
 
     return
 
-def fit(dataset, model_name, cv_folds, cv_repetitions):
+def fit(dataset, model_name, _):
     pca = PCA()
     if model_name == 'svm':
         model = LinearSVC(C = 10)

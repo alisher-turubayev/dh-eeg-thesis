@@ -1,5 +1,4 @@
-import gin.torch.external_configurables
-
-import models.rnn
-
-# Train parameteres
+RNNClassifier.input_size = 11
+RNNClassifier.hidden_size = 22
+RNNClassifier.output_size = 2
+RNNClassifier.nonlinearity = 'relu'
