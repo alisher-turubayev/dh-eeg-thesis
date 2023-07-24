@@ -46,14 +46,20 @@ def main(
         sys.exit(f'Error creating checkpoint directory: {e}')
 
     # Set up logging
-    logging.basicConfig(filename = os.path.join(logs_dir, f'{start_time}.log'), encoding = 'utf-8', level = logging.INFO)    
-    logging.info(f'Started program at {start_time}')
+    try:
+        logging.basicConfig(filename = os.path.join(logs_dir, f'{start_time}.log'), encoding = 'utf-8', level = logging.INFO)   
+        logger = logging.info
+    except:
+        print('Could not start logging to file - output will be forced to stdout.')
+        logger = print
+        
+    logger(f'Started program at {start_time}')
 
     # Set fixed seed if needed
     if fixed_seed is not None:
         torch.manual_seed(fixed_seed)
         np.random.seed(fixed_seed)
-        logging.info(f'Set fixed seed {fixed_seed}')
+        logger(f'Set fixed seed {fixed_seed}')
 
     # Determine if GPU acceleration is available
     if torch.cuda.is_available(): 
@@ -76,11 +82,11 @@ def main(
         dataset = MedeirosDataset(device)
     elif dataset_name == 'peitek':
         dataset = PeitekDataset(device)
-    logging.info(f'Using dataset_name {dataset_name}')
+    logger(f'Using dataset {dataset_name}')
 
-    """
-    TODO: remove this comment once most of the work on development is done
+    # Initialize W&B integration
     wandb.init(
+        name = 'debug ' + dataset_name + ' ' + model_name,
         project = 'dh-eeg-thesis',
         config = {
             "fixed_seed": fixed_seed,
@@ -90,15 +96,14 @@ def main(
             "model_name": model_name
         }
     )
-    """
 
     # Start the model fit or training depending on requested model
     if model_name in ['svm', 'xgboost']:
-        logging.info(f'Starting fit: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.fit(dataset, model_name, cv_folds, cv_repetitions)
+        logger(f'Starting fit: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
+        train.fit(dataset, model_name, cv_folds, cv_repetitions, logger)
     else:
-        logging.info(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.train_test_loop(device, dataset, model_name, epochs, cv_folds, cv_repetitions)
+        logger(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
+        train.train_test_loop(device, dataset, model_name, epochs, cv_folds, cv_repetitions, logger)
 
     wandb.finish()
 

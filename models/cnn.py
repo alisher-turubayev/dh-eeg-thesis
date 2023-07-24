@@ -15,6 +15,7 @@ class CNNClassifier(nn.Module):
         super().__init__()
         layers = []
         layers.append(nn.Conv1d(input_size, hidden_size, kernel_size, padding = 'same'))
+        layers.append(nn.ReLU())
         layers.append(nn.MaxPool1d(int(kernel_size / 2)))
         layers.append(nn.Flatten())
         # TODO: this is a mess
@@ -24,6 +25,7 @@ class CNNClassifier(nn.Module):
         # Then, when we flatten we essentially have an output shape of (batch_size, hidden_size * maxpool_out_size)
         flatten_size = int(hidden_size * (window_size / (kernel_size / 2)))
         layers.append(nn.Linear(flatten_size, output_size))
+        layers.append(nn.Softmax())
 
         self.model = nn.Sequential(*layers)
 
