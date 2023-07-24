@@ -13,10 +13,10 @@ class RNNClassifier(pl.LightningModule):
         output_size,
         n_layers = gin.REQUIRED,
         hidden_size = gin.REQUIRED,
-        nonlinearity = 'relu'
+        nonlinearity = gin.REQUIRED
     ):
         super().__init__()
-        self.model = nn.RNN(input_size, hidden_size, n_layers, nonlinearity, True)
+        self.model = nn.RNN(input_size, hidden_size, n_layers, nonlinearity, batch_first = True)
         self.activation = nn.Sequential(
             nn.Linear(hidden_size, output_size),
             nn.Softmax()

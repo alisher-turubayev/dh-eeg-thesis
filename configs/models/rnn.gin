@@ -1,4 +1,3 @@
-RNNClassifier.input_size = 11
+RNNClassifier.n_layers = 1
 RNNClassifier.hidden_size = 22
-RNNClassifier.output_size = 2
 RNNClassifier.nonlinearity = 'relu'
