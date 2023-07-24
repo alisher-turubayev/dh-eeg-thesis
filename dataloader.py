@@ -4,18 +4,20 @@ import numpy as np
 from sklearn import preprocessing
 import torch
 from torch.utils.data import Dataset
-
-import logging
  
 @gin.configurable('SampleDataset')
 class SampleDataset(Dataset):
+    # TODO: move all this code to preprocessing script - it's not needed here
+    # i.e. move all segments' splicing, data selection, etc. 
+    # The goal is to have the user specify data path to the dataset rather than be be-all/fit-all approach here.
+    
     # Predefined features list for which to calculate second-order features
     NUMERIC_FEATURES = ['Attention', 'Mediation', 'Raw', 'Delta', 'Theta', 'Alpha1', 'Alpha2', 'Beta1', 'Beta2', 'Gamma1', 'Gamma2']
 
     def __init__(self, device, path = gin.REQUIRED, n_segments = gin.REQUIRED):
         super().__init__()
         self.path = path
-        self._is_tabular = (n_segments != 0)
+        self.is_raw = (n_segments != 0)
 
         # Load and preprocess data
         self._preprocess(self._load(), n_segments)
@@ -101,9 +103,12 @@ class SampleDataset(Dataset):
 
     """
     Returns a single item from the dataset at a specified index
+
+    TODO: validate if works:
+            1. rotate x tensor? for CNN at least
     """
     def __getitem__(self, idx):
-        if self._is_tabular:
+        if self.is_raw:
             return torch.tensor(self.x.iloc[idx].values), torch.tensor(self.y.iloc[idx].values)
         else:
             # Steps:
@@ -128,13 +133,30 @@ class SampleDataset(Dataset):
     Returns the entire preprocessed dataset. Used for ML methods
     """
     def get_data(self):
-        if self._is_tabular:
+        if self.is_raw:
             return self.x, self.y
         else:
             raise NotImplementedError()
+    
+    """
+    Returns the shape of the data to help initialize the DL methods
+    """
+    def get_shape(self):
+        # Return a tuple of values (# of columns and # of classes)
+        return self.x.shape[1], self.y.shape[1]
 
 @gin.configurable('MedeirosDataset')
 class MedeirosDataset(Dataset):
+    """
+    Initalize Medeiros dataset
+
+    Parameters:
+    path: path to dataset (must be .parquet file format)
+    is_raw: whether the .parquet file contains raw (i.e. time-series signal data) or processed (i.e. tabular) data
+    window_size: in seconds, the size of the window (ignored if is_raw is False)
+    overlap_size: no-op TODO in float (i.e. 0.5 for 50% overlap) the size of the window overlap
+    sample_rate: the sample rate of time-series signal data (ignored if is_raw is False)
+    """
     def __init__(
             self,
             device,
@@ -147,9 +169,9 @@ class MedeirosDataset(Dataset):
         super().__init__()
         # Store all parameters 
         self.is_raw = is_raw
-        self.window_size = window_size
+        self.window_size = window_size if is_raw else None
         self.overlap_size = overlap_size
-        self.sample_rate = sample_rate
+        self.sample_rate = sample_rate if is_raw else None
         self.device = device
 
         self._preprocess(self._load(path))
@@ -204,6 +226,10 @@ class MedeirosDataset(Dataset):
             raise TypeError('Dataset is not in tabular form')
         else:
             return self.x, self.y
+
+    def get_shape(self):
+        # Return a tuple of values (# of columns and # of classes)
+        return self.x.shape[1], self.y.shape[1]
 
 @gin.configurable('PeitekDataset')
 class PeitekDataset(Dataset):

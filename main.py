@@ -84,26 +84,13 @@ def main(
         dataset = PeitekDataset(device)
     logger(f'Using dataset {dataset_name}')
 
-    # Initialize W&B integration
-    wandb.init(
-        name = 'debug ' + dataset_name + ' ' + model_name,
-        project = 'dh-eeg-thesis',
-        config = {
-            "fixed_seed": fixed_seed,
-            "cv_folds": cv_folds,
-            "cv_repetitions": cv_repetitions,
-            "dataset_name": dataset_name,
-            "model_name": model_name
-        }
-    )
-
     # Start the model fit or training depending on requested model
     if model_name in ['svm', 'xgboost']:
         logger(f'Starting fit: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
         train.fit(dataset, model_name, cv_folds, cv_repetitions, logger)
     else:
         logger(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.train_test_loop(device, dataset, model_name, epochs, cv_folds, cv_repetitions, logger)
+        train.train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger)
 
     wandb.finish()
 
