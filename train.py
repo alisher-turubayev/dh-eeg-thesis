@@ -37,7 +37,7 @@ def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logge
     if model_name == 'cnn':
         model = CNNClassifier(input_size, output_size, window_datapoints)
     else: 
-        model = RNNClassifier(input_size, output_size)
+        model = RNNClassifier(input_size, output_size, window_datapoints)
    
     logger('--------------------')
     logger('Starting training...')

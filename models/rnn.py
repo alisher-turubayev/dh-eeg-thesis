@@ -11,6 +11,7 @@ class RNNClassifier(pl.LightningModule):
         self,
         input_size,
         output_size,
+        window_size,
         n_layers = gin.REQUIRED,
         hidden_size = gin.REQUIRED,
         nonlinearity = gin.REQUIRED
@@ -18,7 +19,7 @@ class RNNClassifier(pl.LightningModule):
         super().__init__()
         self.model = nn.RNN(input_size, hidden_size, n_layers, nonlinearity, batch_first = True)
         self.activation = nn.Sequential(
-            nn.Linear(hidden_size, output_size),
+            nn.Linear(window_size, output_size),
             nn.Softmax()
         )
 
