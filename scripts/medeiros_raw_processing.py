@@ -3,17 +3,17 @@
 #
 # Full reference:
 #
-# Medeiros, J., Couceiro, R., Duarte, G., Durães, J., Castelhano, J., 
-#   Duarte, C., Castelo-Branco, M., Madeira, H., de Carvalho, P., & 
-#   Teixeira, C. (2021). Can EEG Be Adopted as a Neuroscience Reference 
-#   for Assessing Software Programmers' Cognitive Load? Sensors, 21(7), 
+# Medeiros, J., Couceiro, R., Duarte, G., Durães, J., Castelhano, J.,
+#   Duarte, C., Castelo-Branco, M., Madeira, H., de Carvalho, P., &
+#   Teixeira, C. (2021). Can EEG Be Adopted as a Neuroscience Reference
+#   for Assessing Software Programmers' Cognitive Load? Sensors, 21(7),
 #   2338. https://doi.org/10.3390/s21072338
-# 
+#
 # Work completed as part of the Master's Thesis for M.Sc. Digital Health
 #   @ Hasso-Plattner Institute, University of Potsdam, Germany
-# 
+#
 # Authors: Alisher Turubayev, Fabian Stolp (PhD supervisor)
-# 
+#
 # Goals:
 #   open .set files in a specified directory, truncate unneeded data and store
 #   data needed for the deep learning models in a parquet file
@@ -29,10 +29,17 @@
 # ------------------------------------------
 import os
 import mne
+from datetime import datetime
+# Ignore warnings by pandas
+import warnings
+warnings.simplefilter(action='ignore')
 import pandas as pd
 from sklearn.preprocessing import minmax_scale
 
-DATA_PATH = '~/Git/Thesis/thesis_data_transformed'
+DATA_PATH = '~/data/medeiros_raw_extracted'
+# Expand the user ~ to absolute path - needed so that the os.path.isfile check works
+if DATA_PATH[0] == '~':
+    DATA_PATH = os.path.expanduser(DATA_PATH)
 STORAGE_PATH = './data/medeiros/medeiros_raw.parquet'
 WINDOW_SIZE = 2000 # in milliseconds
 
@@ -40,10 +47,24 @@ PARTICIPANTS = ['S01', 'S03', 'S04', 'S05', 'S07', 'S08', 'S10', 'S11', 'S12',
     'S13', 'S14', 'S16', 'S17', 'S18', 'S19', 'S20', 'S21', 'S22', 'S23', 'S24',
     'S25', 'S26', 'S27', 'S28', 'S29', 'S30']
 
+# Remove file where to store if exists (we are overriding it)
+if os.path.isfile(STORAGE_PATH):
+    os.remove(STORAGE_PATH)
+
+start_time = datetime.now()
+
 for participant_name in PARTICIPANTS:
+    print(f'Processing participant {participant_name}')
+
+    # Define file names for the current participant
     file1 = DATA_PATH + '/' + participant_name + '/' + participant_name + 'R01_an.set'
     file2 = DATA_PATH + '/' + participant_name + '/' + participant_name + 'R02_an.set'
     file3 = DATA_PATH + '/' + participant_name + '/' + participant_name + 'R03_an.set'
+
+    # Check if files exists
+    if os.path.isfile(file1) == False or os.path.isfile(file2) == False or os.path.isfile(file3) == False:
+        print(f'No files for {participant_name} found. Continuing...')
+        continue
 
     raw1 = mne.io.read_raw_eeglab(file1)
     raw2 = mne.io.read_raw_eeglab(file2)
@@ -85,9 +106,9 @@ for participant_name in PARTICIPANTS:
     # Append to new dataframe
     df = pd.concat([control, task], ignore_index = True)
 
+    # Repeat for other two tasks
     if raw2.preload == False:
         raw2.load_data()
-    # Repeat for other two tasks
     temp = raw2.to_data_frame()
     temp.drop('time', axis = 1, inplace = True)
 
@@ -110,8 +131,7 @@ for participant_name in PARTICIPANTS:
     df = pd.concat([df, control, task], ignore_index = True)
 
     if raw3.preload == False:
-        raw3.load()
-
+        raw3.load_data()
     temp = raw3.to_data_frame()
     temp.drop('time', axis = 1, inplace = True)
 
@@ -150,6 +170,5 @@ for participant_name in PARTICIPANTS:
     else:
         df.to_parquet(STORAGE_PATH, engine = 'fastparquet', index = False)
 
-    # DEBUG
-    if participant_name == 'S04':
-        break
+end_time = datetime.now()
+print(f'Process finished. Total time: {end_time - start_time}')
