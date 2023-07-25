@@ -11,32 +11,55 @@ class CNNClassifier(pl.LightningModule):
         self,
         input_size,
         output_size,
-        window_size,
-        n_layers = gin.REQUIRED,
-        kernel_size = gin.REQUIRED,
+        window_datapoints,
         hidden_size = gin.REQUIRED,
+        kernel_size = gin.REQUIRED,
+        stride = gin.REQUIRED,
+        maxpool_kernel_size = gin.REQUIRED,
+        nn_size = gin.REQUIRED,
+        dropout_rate = gin.REQUIRED
     ):
         super().__init__()
         layers = []
-        # TODO: fix warning on padding = 'same'
-        layers.append(nn.Conv1d(input_size, hidden_size, kernel_size, padding = 'same'))
+
+        if window_datapoints is not None:
+            # If window datapoints is passed, we assume that data is signal data and windowed
+            curr_len = window_datapoints
+
+            # First layer - 1D Convolution with Dropout layer
+            layers.append(nn.Conv1d(input_size, hidden_size, kernel_size, stride))
+            
+        else:
+            # Otherwise, we assume the data is in 4 segments (as per Medeiros et al (2021), p. 12)
+            # Thus, our calculations change a bit
+            # Data is of shape [batch size, segments, # of features]
+            curr_len = input_size # where input_size is the # of features per segment
+            layers.append(nn.Conv1d(4, hidden_size, kernel_size, stride))
+            
         layers.append(nn.ReLU())
-        layers.append(nn.MaxPool1d(int(kernel_size / 2)))
+        layers.append(nn.Dropout(dropout_rate))
+        
+        # Calculate new length - for formula see https://pytorch.org/docs/stable/generated/torch.nn.Conv1d.html
+        curr_len = int((curr_len - (kernel_size - 1) - 1) / stride + 1)
+        
+        # Second layer - Max pooling
+        layers.append(nn.MaxPool1d(maxpool_kernel_size))
+        
+        # Calculate new length - for formula see https://pytorch.org/docs/stable/generated/torch.nn.MaxPool1d.html
+        curr_len = int((curr_len - (maxpool_kernel_size - 1) - 1) / maxpool_kernel_size + 1)
+        
+        # Third layer - fully connected NN with ReLU -> reduce to nn_size
+        # Flatten size is size of convolution multiplied by current length of sequence
         layers.append(nn.Flatten())
-        # TODO: this is a mess
-        # Initially, kernel size is 200
-        # Divide by 2 -> 100
-        # Because pooling -> window size / kernel size => 2000 / 100 = 20 (so our maxpool layer has output size of 20)
-        # Then, when we flatten we essentially have an output shape of (batch_size, hidden_size * maxpool_out_size)
-        flatten_size = int(hidden_size * (window_size / (kernel_size / 2)))
-        layers.append(nn.Linear(flatten_size, output_size))
-        layers.append(nn.Softmax())
+        layers.append(nn.Linear(hidden_size * curr_len, nn_size))
 
-        # TODO: create logic to handle tabular data (i.e. window_size is NaN)
+        # Final layer - fully connected NN + Softmax activation layer
+        layers.append(nn.Linear(nn_size, output_size))
+        layers.append(nn.Softmax(dim = 1))
+        
         self.model = nn.Sequential(*layers)
-
         # Determine task 
-        if output_size == 1:
+        if window_datapoints is None:
             metrics_task = "binary"
             self.loss_fn = F.binary_cross_entropy
         else:
@@ -44,7 +67,6 @@ class CNNClassifier(pl.LightningModule):
             self.loss_fn = F.cross_entropy
 
         # Register metrics
-        # TODO: check if this works
         self.acc = mtr.Accuracy(task = metrics_task, num_classes = output_size, average = 'macro')
         self.prec = mtr.Precision(task = metrics_task, num_classes = output_size, average = 'macro')
         self.recall = mtr.Recall(task = metrics_task, num_classes = output_size, average = 'macro')
@@ -62,10 +84,11 @@ class CNNClassifier(pl.LightningModule):
         x, y = batch
         pred_y = self.model(x)
         loss = self.loss_fn(pred_y, y)
+        # Calculate accuracy on validation - we use this metric to early stop training
         self.acc(pred_y, y)
 
         self.log('val_step_loss', loss)
-        self.log('val_step_acc', self.acc)
+        self.log('val_acc', self.acc, on_step = False, on_epoch = True)
         return loss
     
     def on_validation_end(self):
@@ -76,7 +99,7 @@ class CNNClassifier(pl.LightningModule):
         x, y = batch
         pred_y = self.model(x)
         
-        # Update metrics
+        # Update metrics of interest
         self.prec(pred_y, y)
         self.recall(pred_y, y)
         self.f1score(pred_y, y)

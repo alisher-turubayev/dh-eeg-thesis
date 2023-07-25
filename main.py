@@ -1,15 +1,16 @@
+import os
+import sys
+import logging
+from datetime import datetime
+
 import gin
 import torch
 import numpy as np
 import wandb
+from pytorch_lightning.trainer import seed_everything
 
 from dataloader import SampleDataset, MedeirosDataset, PeitekDataset
 import train
-
-from datetime import datetime
-import logging
-import sys
-import os
 
 @gin.configurable('run')
 def main(
@@ -59,6 +60,7 @@ def main(
     if fixed_seed is not None:
         torch.manual_seed(fixed_seed)
         np.random.seed(fixed_seed)
+        seed_everything(fixed_seed, workers = True)
         logger(f'Set fixed seed {fixed_seed}')
 
     # Determine if GPU acceleration is available
@@ -90,7 +92,7 @@ def main(
         train.fit(dataset, model_name, cv_folds, cv_repetitions, logger)
     else:
         logger(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger)
+        train.train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger, checkpoints_dir)
 
     wandb.finish()
 
