@@ -21,16 +21,22 @@ import xgboost as xgb
 
 @gin.configurable('train_params')
 def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger, checkpoint_path):
-    # Get data properties to initialize the model
-    input_size, output_size = dataset.get_shape()
-    if dataset.is_raw:
-        window_datapoints = dataset.window_size * dataset.sample_rate
-    else:
-        window_datapoints = None
-
-    # Create three subsets of the original dataset
-    # 60%/20%/20% split
+    # Determine the shape of the data to initalize our DL model
+    data_shape, label_shape = dataset.get_data_shape()
+    # Input size is # of data channels (if the dataset is in raw format) or # of features
+    input_size = data_shape[0]
+    # Output size is # of classes to predict
+    output_size = label_shape[0]
+    # Window size is # of datapoints per sample (if the dataset is in raw format) or None to indicate that data is tabular
+    window_datapoints = data_shape[1] if dataset.is_raw else None
+    # Make a split of the dataset
     train_dataset, val_dataset, test_dataset = random_split(dataset, [0.6, 0.2, 0.2])
+
+    # Cache to RAM both the train and validation datasets - they are accessed each epoch
+    #   Because the ouput of random_split is a class `Subset`, we need to access its' property rather than calling function directly
+    train_dataset.dataset.cache_to_ram()
+    val_dataset.dataset.cache_to_ram()
+
     # Initialize dataloaders
     train_loader = DataLoader(train_dataset, batch_size = 4, shuffle = True, num_workers = min(os.cpu_count(), 4))
     val_loader = DataLoader(val_dataset, batch_size = 4, shuffle = False, num_workers = min(os.cpu_count(), 4))

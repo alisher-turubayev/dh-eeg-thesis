@@ -1,5 +1,1 @@
-MedeirosDataset.path = './data/medeiros/medeiros_raw.parquet'
-MedeirosDataset.is_raw = True
-MedeirosDataset.window_size = 2 # in seconds
-MedeirosDataset.overlap_size = 0. # TODO: implement
-MedeirosDataset.sample_rate = 1000 # in Hz
+MedeirosDataset.path = './data/medeiros/medeiros_tabular/'

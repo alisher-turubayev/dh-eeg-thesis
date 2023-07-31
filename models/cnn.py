@@ -74,6 +74,10 @@ class CNNClassifier(pl.LightningModule):
 
     def training_step(self, batch, _):
         x, y = batch
+        # Move to device (because the tensor by default is on CPU)
+        x = x.to(self.device)
+        y = y.to(self.device)
+
         pred_y = self.model(x)
         loss = self.loss_fn(pred_y, y)
 
@@ -82,6 +86,10 @@ class CNNClassifier(pl.LightningModule):
     
     def validation_step(self, batch, _):
         x, y = batch
+        # Move to device (because the tensor by default is on CPU)
+        x = x.to(self.device)
+        y = y.to(self.device)
+        
         pred_y = self.model(x)
         loss = self.loss_fn(pred_y, y)
         # Calculate accuracy on validation - we use this metric to early stop training
@@ -97,6 +105,10 @@ class CNNClassifier(pl.LightningModule):
 
     def test_step(self, batch, _):
         x, y = batch
+        # Move to device (because the tensor by default is on CPU)
+        x = x.to(self.device)
+        y = y.to(self.device)
+
         pred_y = self.model(x)
         
         # Update metrics of interest

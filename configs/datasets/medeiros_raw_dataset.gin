@@ -1,0 +1,2 @@
+MedeirosDatasetRaw.path = './data/medeiros/medeiros_raw/'
+MedeirosDatasetRaw.metadata_path = './data/medeiros/medeiros_raw/metadata.csv'

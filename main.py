@@ -9,7 +9,7 @@ import numpy as np
 import wandb
 from pytorch_lightning.trainer import seed_everything
 
-from dataloader import SampleDataset, MedeirosDataset, PeitekDataset
+from dataloader import MedeirosDataset, MedeirosDatasetRaw, PeitekDataset, PeitekDatasetRaw
 import train
 
 @gin.configurable('run')
@@ -21,7 +21,7 @@ def main(
     dataset_name = gin.REQUIRED,
     model_name = gin.REQUIRED
 ):
-    assert dataset_name in ['sample', 'medeiros', 'peitek'], f'Dataset name not recognized: {dataset_name}'
+    assert dataset_name in ['medeiros', 'medeiros_raw', 'peitek', 'peitek_raw'], f'Dataset name not recognized: {dataset_name}'
     assert model_name in ['svm', 'xgboost', 'cnn', 'rnn'], f'Model name not recognized: {model_name}'
 
     # Take current time for logging
@@ -78,12 +78,14 @@ def main(
         logging.error(f': Error reading gin configuration files: {e}')
         sys.exit(1)
 
-    if dataset_name == 'sample':
-        dataset = SampleDataset(device)
-    elif dataset_name == 'medeiros':
-        dataset = MedeirosDataset(device)
+    if dataset_name == 'medeiros':
+        dataset = MedeirosDataset()
+    elif dataset_name == 'medeiros_raw':
+        dataset = MedeirosDatasetRaw()
     elif dataset_name == 'peitek':
-        dataset = PeitekDataset(device)
+        dataset = PeitekDataset()
+    elif dataset_name == 'peitek_raw':
+        dataset = PeitekDatasetRaw()
     logger(f'Using dataset {dataset_name}')
 
     # Start the model fit or training depending on requested model
