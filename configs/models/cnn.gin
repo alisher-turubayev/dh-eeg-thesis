@@ -1,0 +1,6 @@
+CNNClassifier.hidden_size = 120
+CNNClassifier.kernel_size = 20
+CNNClassifier.stride = 1
+CNNClassifier.maxpool_kernel_size = 20
+CNNClassifier.nn_size = 100
+CNNClassifier.dropout_rate = 0.5

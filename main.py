@@ -1,25 +1,27 @@
+import os
+import sys
+import logging
+from datetime import datetime
+
 import gin
 import torch
 import numpy as np
 import wandb
+from pytorch_lightning.trainer import seed_everything
 
-from dataloader import SampleDataset, MedeirosDataset, PeitekDataset
+from dataloader import MedeirosDataset, MedeirosDatasetRaw, PeitekDataset, PeitekDatasetRaw
 import train
-
-from datetime import datetime
-import logging
-import sys
-import os
 
 @gin.configurable('run')
 def main(
     fixed_seed = gin.REQUIRED,
     cv_folds = gin.REQUIRED,
     cv_repetitions = gin.REQUIRED,
-    dataset = gin.REQUIRED,
+    epochs = gin.REQUIRED,
+    dataset_name = gin.REQUIRED,
     model_name = gin.REQUIRED
 ):
-    assert dataset in ['sample', 'medeiros', 'peitek'], f'Dataset name not recognized: {dataset}'
+    assert dataset_name in ['medeiros', 'medeiros_raw', 'peitek', 'peitek_raw'], f'Dataset name not recognized: {dataset_name}'
     assert model_name in ['svm', 'xgboost', 'cnn', 'rnn'], f'Model name not recognized: {model_name}'
 
     # Take current time for logging
@@ -45,52 +47,54 @@ def main(
         sys.exit(f'Error creating checkpoint directory: {e}')
 
     # Set up logging
-    logging.basicConfig(filename = os.path.join(logs_dir, f'{start_time}.log'), encoding = 'utf-8', level = logging.INFO)    
-    logging.info(f'Started program at {start_time}')
+    try:
+        logging.basicConfig(filename = os.path.join(logs_dir, f'{start_time}.log'), encoding = 'utf-8', level = logging.INFO)   
+        logger = logging.info
+    except:
+        print('Could not start logging to file - output will be forced to stdout.')
+        logger = print
+        
+    logger(f'Started program at {start_time}')
 
     # Set fixed seed if needed
     if fixed_seed is not None:
         torch.manual_seed(fixed_seed)
         np.random.seed(fixed_seed)
-        logging.info(f'Set fixed seed {fixed_seed}')
+        seed_everything(fixed_seed, workers = True)
+        logger(f'Set fixed seed {fixed_seed}')
 
-    # Read configuration files for dataset/model
+    # Determine if GPU acceleration is available
+    if torch.cuda.is_available(): 
+        dev = "cuda:0" 
+    else: 
+        dev = "cpu" 
+    device = torch.device(dev)
+
+    # Read configuration files for dataset_name/model
     try:
-        gin.parse_config_file(f'configs/datasets/{dataset}_dataset.gin')
+        gin.parse_config_file(f'configs/datasets/{dataset_name}_dataset.gin')
         gin.parse_config_file(f'configs/models/{model_name}.gin')
     except IOError as e:
         logging.error(f': Error reading gin configuration files: {e}')
         sys.exit(1)
 
-    if dataset == 'sample':
-        loader = SampleDataset()
-    elif dataset == 'medeiros':
-        loader = MedeirosDataset()
-    elif dataset == 'peitek':
-        loader = PeitekDataset()
-    logging.info(f'Using dataset {dataset}')
-
-    """
-    TODO: remove this comment once most of the work on development is done
-    wandb.init(
-        project = 'dh-eeg-thesis',
-        config = {
-            "fixed_seed": fixed_seed,
-            "cv_folds": cv_folds,
-            "cv_repetitions": cv_repetitions,
-            "dataset": dataset,
-            "model_name": model_name
-        }
-    )
-    """
+    if dataset_name == 'medeiros':
+        dataset = MedeirosDataset()
+    elif dataset_name == 'medeiros_raw':
+        dataset = MedeirosDatasetRaw()
+    elif dataset_name == 'peitek':
+        dataset = PeitekDataset()
+    elif dataset_name == 'peitek_raw':
+        dataset = PeitekDatasetRaw()
+    logger(f'Using dataset {dataset_name}')
 
     # Start the model fit or training depending on requested model
     if model_name in ['svm', 'xgboost']:
-        logging.info(f'Starting fit: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.fit(loader, model_name, cv_folds, cv_repetitions)
+        logger(f'Starting fit: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
+        train.fit(dataset, model_name, cv_folds, cv_repetitions, logger)
     else:
-        logging.info(f'Starting training: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.train_test_loop(loader, model_name, cv_folds, cv_repetitions)
+        logger(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
+        train.train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger, checkpoints_dir)
 
     wandb.finish()
 

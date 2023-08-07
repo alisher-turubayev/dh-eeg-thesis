@@ -1,5 +1,2 @@
-import gin.torch.external_configurables
-
-import models.rnn
-
-# Train parameteres
+RNNClassifier.hidden_size = 136
+RNNClassifier.n_layers = 5

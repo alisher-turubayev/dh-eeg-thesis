@@ -1,0 +1,8 @@
+run.fixed_seed = None
+
+run.cv_folds = 5
+run.cv_repetitions = 5
+run.epochs = 100
+
+run.dataset_name = 'medeiros_raw'
+run.model_name = 'cnn'

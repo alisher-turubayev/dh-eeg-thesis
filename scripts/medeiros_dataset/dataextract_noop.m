@@ -1,6 +1,9 @@
 % Automated data extraction script for BASE Mental Effort Monitoring
 %   Dataset by Medeiros et al (2021)
 %
+% For a version with preprocessing done on data (such as bad channel 
+%   removal), see `dataextract.m` script.
+%
 % Full reference:
 %
 % Medeiros, J., Couceiro, R., Duarte, G., Durães, J., Castelhano, J., 
@@ -10,7 +13,7 @@
 %   2338. https://doi.org/10.3390/s21072338
 % 
 % Work completed as part of the Master's Thesis for M.Sc. Digital Health
-% Hasso-Plattner Institute, University of Potsdam, Germany
+%   @ Hasso-Plattner Institute, University of Potsdam, Germany
 % 
 % Authors: Alisher Turubayev, Fabian Stolp (PhD supervisor)
 % 
@@ -21,8 +24,7 @@
 %
 % Usage:
 % 1. Change dataFolder variable to where unprocessed data from 
-%       Medeiros et al. (2021) is located as needed - by default, 
-%       it's the current directory + 'thesis_data'
+%       Medeiros et al. (2021) is located as needed
 % 2. Change transformedDataFolder variable to change where to store 
 %       processed data as needed
 % 3. Change the list of participants to process - by default, the 
@@ -31,14 +33,9 @@
 % Make sure the EEGLAB is in the current working directory or uncomment 
 % and adjust the addpath parameter to point to EEGLAB folder - otherwise, 
 % the script won't work.
-% 
 % ----------------------------------------------------------------------
 % IF NEEDED, uncomment this line - add EEGLAB to path
-% addpath('PATH/TO/EEGLAB')
-
-% IF NEEDED, adjust this line - this should point to the included
-%   'locdata.ced' file
-locDataPath = './thesis_scripts/locdata.ced';
+%addpath(genpath('PATH/TO/EEGLAB'))
 
 % Define data folder and all available participants
 dataFolder = append(pwd, '/thesis_data');
@@ -115,7 +112,7 @@ for i = 1:size(participants, 2)
             % Remove used data from workspace memory
             clear data; 
 
-            % Import into EEGLAB and start processing
+            % Import into EEGLAB
             EEG = pop_importdata('dataformat','array','nbchan',68,...
                 'data','eegRaw','setname',char(name),'srate',1000,...
                 'subject',char(participants(i)),'pnts',0,...
@@ -130,67 +127,6 @@ for i = 1:size(participants, 2)
                 'fields',{'type','latency','urevent'},'skipline',1,...
                 'timeunit',1);
 
-            % Remove unnecessary channels -> 60 channels left
-            EEG = pop_select(EEG,'rmchannel',...
-                {'M1','M2','CB1','CB2','HEO','VEO','EKG','EMG'});
-            % Clear the subset of them from EEG.chaninfo.removedchans -
-            %   this is important for interpolation (if we do not 
-            %   remove these channels, we will interpolate them too)
-            EEG.chaninfo.removedchans = [];
-
-            % Add channel location information
-            EEG = pop_chanedit(EEG, 'load', {char(locDataPath)});
-
-            % Apply filter at 1Hz / 90Hz
-            EEG = pop_eegfiltnew(EEG, 'locutoff',1);
-            EEG = pop_eegfiltnew(EEG, 'hicutoff',90);
-
-            % Apply notch filter at 50 Hz
-            % 
-            % NOTE: Default values used
-            EEG = pop_cleanline(EEG, 'bandwidth',2,'chanlist',1:60,...
-                'computepower',0,'linefreqs',50,'newversion',0,...
-                'normSpectrum',0,'p',0.01,'pad',2,'plotfigures',0,...
-                'scanforlines',0,'sigtype','Channels',...
-                'taperbandwidth',2,'tau',100,'verb',0,'winsize',3,...
-                'winstep',1);
-
-            % Auto-label bad channels and remove (only channels are 
-            %   removed, bad sections are not - to avoid NaN values in 
-            %   the final dataset)
-            % 
-            % NOTE: Default values are used for detecting bad channels
-            %   - perhaps more aggressive values could be investigated
-
-            EEG = pop_clean_rawdata(EEG, 'FlatlineCriterion',5,...
-                'ChannelCriterion',0.8,'LineNoiseCriterion',4,...
-                'Highpass','off','BurstCriterion','off',...
-                'WindowCriterion','off','BurstRejection','off',...
-                'Distance','Euclidian');
-            
-            % Add back bad channels by interpolation
-            EEG = eeg_interp(EEG, EEG.chaninfo.removedchans, 'spherical');
-            
-            % Re-reference to average reference
-            EEG = pop_reref(EEG, []);
-
-            % Do a ICA decomposition and auto-label components
-            EEG = pop_runica(EEG, 'icatype', 'runica', 'extended',1,...
-                'interrupt','off');
-            EEG = pop_iclabel(EEG, 'default');
-
-            % Flag components identified as artifacts:
-            %  Muscle artifacts with 0.8 to 1 confidence
-            %  Eye artifacts with 0.85 to 1 confidence
-            %  Line noise with 0.85 to 1 confidence
-            %  Channel noise with 0.85 to 1 confidence
-            %  
-            % Order of the input Brain, Muscle, Eye, Heart, Line Noise, 
-            %   Channel Noise, Other
-            EEG = pop_icflag(EEG,...
-                [NaN NaN; 0.8 1; 0.8 1; 0.8 1; 0.8 1; 0.8 1; NaN NaN]);
-            EEG = pop_subcomp(EEG, [], 0);
-           
             % Run a sanity check
             EEG = eeg_checkset(EEG);
 
