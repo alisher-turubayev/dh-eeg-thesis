@@ -50,14 +50,18 @@ def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logge
     # Enable checkpointing
     checkpoint_callback = ModelCheckpoint(
         monitor = 'val_acc',
-        dirpath = checkpoint_path,
-        filename = model_name + '-' + dataset.__class__.__name__ + '-{epoch:02d}-{val_acc:.2f}'
-    )
-    # Enable early stopping based on per-epoch validation accuracy
-    earlystopping_callback = EarlyStopping(
-        monitor = 'val_acc',
         mode = 'max',
-        check_finite = True
+        dirpath = checkpoint_path,
+        filename = model_name + '-' + dataset.__class__.__name__ + '-{epoch:02d}-{val_acc:.2f}',
+        verbose = True
+    )
+    # Enable early stopping
+    earlystopping_callback = EarlyStopping(
+        patience = 10,
+        monitor = 'val_step_loss',
+        mode = 'min',
+        check_finite = True,
+        verbose = True
     )
 
     wandb_logger = WandbLogger(project = "dh-eeg-thesis")
@@ -73,9 +77,13 @@ def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logge
     end_time = datetime.now()
 
     logger('-------------------')
-    logger(f'Training complete. Total time to train: {start_time - end_time}')
+    logger(f'Training complete. Total time to train: {end_time - start_time}')
 
+    logger('Starting testing...')
+    start_time = datetime.now()
     trainer.test(model, dataloaders = test_loader)
+    end_time = datetime.now()
+    logger(f'Testing complete. Time to test {end_time - start_time}')
 
     return
 

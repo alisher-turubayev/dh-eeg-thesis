@@ -3,6 +3,7 @@ import gin
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+from sklearn.preprocessing import minmax_scale
 
 @gin.configurable('MedeirosDataset')
 class MedeirosDataset(Dataset):

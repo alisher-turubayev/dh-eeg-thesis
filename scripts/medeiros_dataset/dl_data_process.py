@@ -38,7 +38,6 @@ import os
 import mne
 from datetime import datetime
 import pandas as pd
-from sklearn.preprocessing import minmax_scale
 
 DATA_PATH = '~/data/medeiros_raw_extracted'
 STORAGE_PATH = './data/medeiros/medeiros_raw'
@@ -122,7 +121,7 @@ for participant_name in PARTICIPANTS:
         for sample in samples:
             # Create a new file
             sample.to_parquet(os.path.join(STORAGE_PATH, str(sample_index) + '.parquet'))
-            # Add metadata to the CSV file
+            # Add metadata about this file
             row_to_insert = [sample_index]
             row_to_insert.extend(TASK_CODES['control'])
             metadata[sample_index] = row_to_insert
