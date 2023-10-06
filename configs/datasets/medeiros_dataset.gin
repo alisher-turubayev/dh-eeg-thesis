@@ -1,1 +1,1 @@
-MedeirosDataset.path = './data/medeiros/medeiros_tabular/'
+MedeirosDataset.path = './data/medeiros/medeiros_processed/'

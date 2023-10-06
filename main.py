@@ -1,6 +1,5 @@
 import os
 import sys
-import logging
 from datetime import datetime
 
 import gin
@@ -46,13 +45,7 @@ def main(
     except OSError as e:
         sys.exit(f'Error creating checkpoint directory: {e}')
 
-    # Set up logging
-    try:
-        logging.basicConfig(filename = os.path.join(logs_dir, f'{start_time}.log'), encoding = 'utf-8', level = logging.INFO)   
-        logger = logging.info
-    except:
-        print('Could not start logging to file - output will be forced to stdout.')
-        logger = print
+    logger = print
         
     logger(f'Started program at {start_time}')
 

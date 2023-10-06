@@ -10,21 +10,63 @@ class MedeirosDataset(Dataset):
     def __init__(self, path = gin.REQUIRED):
         super().__init__()
         self.is_raw = False
+        self.path = path
+        self.n_samples = -1
+        self._cached_dataset = None
     
-    def _cache_to_ram(self):
-        raise NotImplementedError()
+    # Note: cache_to_ram should be used only with DL models
+    def cache_to_ram(self):
+        if self._cached_dataset is None:
+            data, labels = self.get_data()
+            # Store as tensor
+            data = torch.tensor(data.values)
+            labels = torch.tensor(labels.values)
+            # Cast both to tensor double type
+            # Weird behaviour - not sure why .double() doesn't work but .float does
+            data = data.float()
+            labels = labels.float()
+            # Store the number of samples
+            self.n_samples = data.shape[0]
+            # Transpose the [n_rows, n_cols] to [n_cols, n_rows]
+            self._cached_dataset = (torch.transpose(data, 0, 1), label)
 
     def __len__(self):
-        raise NotImplementedError()
+        return self.n_samples
     
     def __getitem__(self, idx):
-        raise NotImplementedError()
+        return self._cached_dataset[idx]
+
+    def _debug_check_for_nans(self, data, labels):
+        if data.isnull().values.any():
+            print('NaNs found in data')
+            print(data.isnull())
+            exit(-1)
+        if labels.isnull().values.any():
+            print('NaNs found in labels')
+            print(labels.isnull())
+            exit(-1)
 
     def get_data(self):
-        raise NotImplementedError()
+        # Get all files in the `path` directory
+        # https://stackoverflow.com/a/3207973
+        files = [os.path.join(self.path, file) for file in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, file))]
+        
+        data = pd.DataFrame()
+        labels = pd.DataFrame()
+
+        for file in files:
+            curr_df = pd.read_parquet(file)
+            labels = pd.concat([labels, curr_df[['label0', 'label1', 'label2', 'label3']]], ignore_index = True)
+            data = pd.concat([data, curr_df.drop(columns = ['label0', 'label1', 'label2', 'label3'])], ignore_index = True)
+
+        self._debug_check_for_nans(data, labels)
+
+        del curr_df
+        return data, labels
 
     def get_data_shape(self):
-        raise NotImplementedError()
+        x, y = self[0]
+        return x.shape, y.shape
 
 @gin.configurable('MedeirosDatasetRaw')
 class MedeirosDatasetRaw(Dataset):

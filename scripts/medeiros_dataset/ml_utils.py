@@ -66,7 +66,7 @@ def split_into_segments(df):
         if segment_start + nperseg > df.shape[0]:
             segments.append(df.iloc[segment_start:df.shape[0]])
         else: 
-            segments.append(df.iloc[segment_start:nperseg])
+            segments.append(df.iloc[segment_start:segment_start + nperseg])
             segment_start += nperseg
 
     return segments
@@ -107,10 +107,7 @@ def extract_features(df_unprocessed, eng):
     2. The number of power ratio features is increased to 42, 
         as there are 7 * 6 pairs of frequency bands. In total, there are 68
         uni-channel features instead of declared 48 in the paper.
-    3. `Average frequency as estimation of mean frequency of the PSD` (p.11)
-        did not make sense to us, so we opted to calculate mean frequency for each
-        frequency band, and then take an average of that.
-    4. The number of differential and absolute asymmetry features is increased to 
+    3. The number of differential and absolute asymmetry features is increased to 
         168 from 126. We could not understand what 9 pairs were used for the calculation,
         so we opted to do these calculations with the 12 pairs described in 
         Lin et al. (2010) http://ieeexplore.ieee.org/document/5458075/.
@@ -215,16 +212,8 @@ def extract_features(df_unprocessed, eng):
             f_window['f_pwr_hgb'] = f_window['f_hi_gamma_power'] / f_window['f_beta_power']
             f_window['f_pwr_hglg'] = f_window['f_hi_gamma_power'] / f_window['f_low_gamma_power']
             f_window['f_pwr_hgmg'] = f_window['f_hi_gamma_power'] / f_window['f_mid_gamma_power']
-            # Average of mean freq
-            mf_d = eng.meanfreq(psd[idx_delta], SAMPLE_RATE)
-            mf_t = eng.meanfreq(psd[idx_theta], SAMPLE_RATE)
-            mf_a = eng.meanfreq(psd[idx_alpha], SAMPLE_RATE)
-            mf_b = eng.meanfreq(psd[idx_beta], SAMPLE_RATE)
-            mf_lg = eng.meanfreq(psd[idx_low_gamma], SAMPLE_RATE)
-            mf_mg = eng.meanfreq(psd[idx_mid_gamma], SAMPLE_RATE)
-            mf_hg = eng.meanfreq(psd[idx_hi_gamma], SAMPLE_RATE)
-
-            f_window['f_av_meanfreq'] = np.mean([mf_d, mf_t, mf_a, mf_b, mf_lg, mf_mg, mf_hg])
+            # Mean frequency
+            f_window['f_av_meanfreq'] = eng.meanfreq(window.to_numpy(copy = True))
             # Brain indicies
             f_window['f_brain_index1'] = f_window['f_beta_power'] / (f_window['f_theta_power'] + f_window['f_alpha_power'])
             f_window['f_brain_index2'] = f_window['f_theta_power'] / (f_window['f_beta_power'] + f_window['f_alpha_power'])

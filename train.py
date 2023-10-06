@@ -3,10 +3,18 @@ from datetime import datetime
 
 import gin
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import PCA
+from sklearn.metrics import make_scorer, accuracy_score, f1_score, precision_score, recall_score
 from sklearn.svm import LinearSVC
+from sklearn.utils import shuffle
+
+from shutil import rmtree
+from joblib import Memory
+
+import pickle
 
 from torch.utils.data import DataLoader, random_split
 
@@ -18,6 +26,8 @@ from models.cnn import CNNClassifier
 from models.rnn import RNNClassifier
 
 import xgboost as xgb
+
+import wandb
 
 @gin.configurable('train_params')
 def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger, checkpoint_path):
@@ -88,17 +98,94 @@ def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logge
     return
 
 def fit(dataset, model_name, cv_folds, cv_repetitions, logger):
-    pca = PCA()
-    if model_name == 'svm':
-        model = LinearSVC(C = 10)
-    else:
-        model = xgb.XGBClassifier()
-    pipe = Pipeline(steps = [('pca', pca), ('model', model)])
+    # Used resources:
+    # https://scikit-learn.org/stable/auto_examples/compose/plot_compare_reduction.html
+    # https://scikit-learn.org/stable/auto_examples/model_selection/plot_multi_metric_evaluation.html
+    # https://docs.wandb.ai/guides/integrations/scikit
 
+   
     X, y = dataset.get_data()
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.33)
+    # Shuffle input array
+    X, y = shuffle(X, y)
+    # Make sure that the one-hot encoding is reversed before feeding the data into the ML algorithms
+    y.rename(columns = {'label0': 0, 'label1': 1, 'label2': 2, 'label3': 3,}, inplace = True)
+    y = y.idxmax(1)
 
-    pipe.fit(X = X_train, y = y_train)
-    logger(f'Score of {model_name}: {model.score(X = X_test, y = y_test)}')
+    # None forces the n_components to be min(n_samples, n_features)
+    N_COMPONENTS = [1, 5, None]
+    SVM_C = [pow(2, -10), pow(2, -5), pow(2, 1), pow(2, 5), pow(2, 10)]
+    SVM_MAX_ITER = [1000, 2000, 5000]
+
+    pipe = Pipeline(
+        [
+            ('scaling', StandardScaler()),
+            ('reduce_dim', 'passthrough'),
+            ('classifier', 'passthrough'),
+        ]
+    )
+
+    if model_name == 'svm':
+        grid_params = [
+            {
+                'reduce_dim': [PCA()],
+                'reduce_dim__n_components': N_COMPONENTS, 
+                'classifier': [LinearSVC()],
+                'classifier__dual': [True],
+                'classifier__C': SVM_C,
+                'classifier__max_iter': SVM_MAX_ITER
+            }
+        ]
+        config = {
+            'PCA_n_components': N_COMPONENTS,
+            'classifier': 'SVM',
+            'classifier_dual': 'auto',
+            'classifier_C': SVM_C,
+            'classifier_max_iter': SVM_MAX_ITER
+        }
+    else:
+        grid_params = [
+            {
+                'reduce_dim': [PCA()],
+                'reduce_dim__n_components': N_COMPONENTS, 
+                'classifier': [xgb.XGBClassifier()]
+                # TODO: add classifier hyperparameters
+            }
+        ]
+        config = {
+            'PCA_n_components': N_COMPONENTS,
+            'classifier': 'XGBoost'
+        }
+
+    scoring = {
+        'accuracy': make_scorer(accuracy_score),
+        'precision': make_scorer(precision_score, average = 'macro', zero_division = 0),
+        'recall': make_scorer(recall_score, average = 'macro', zero_division = 0),
+        'f1_score': make_scorer(f1_score, average = 'macro', zero_division = 0)    
+    }
+
+    gs = GridSearchCV(
+        estimator = pipe,
+        param_grid = grid_params,
+        scoring = scoring,
+        refit = 'accuracy',
+        cv = cv_repetitions,
+        verbose = 1,
+        n_jobs = -1
+    )
+
+    wandb.init(project = "dh-eeg-thesis", config = config)
+
+    gs.fit(X, y)
+    results = gs.cv_results_
+
+    wandb.run.summary['best_accuracy'] = gs.best_score_
     
+    wandb.log({
+        'mean_fit_time': results['mean_fit_time'],
+        'mean_score_time': results['mean_score_time'],
+        'mean_accuracy': results['mean_test_accuracy'],
+        'mean_precision': results['mean_test_precision'],
+        'mean_recall': results['mean_test_recall'],
+        'mean_f1_score': results['mean_test_f1_score'],
+    })
     return

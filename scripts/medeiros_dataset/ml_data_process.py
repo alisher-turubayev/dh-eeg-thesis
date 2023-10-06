@@ -38,10 +38,7 @@
 #   2. The number of power ratio features is increased to 42, 
 #       as there are 7 * 6 pairs of frequency bands. In total, there are 68
 #       uni-channel features instead of declared 48 in the paper.
-#   3. `Average frequency as estimation of mean frequency of the PSD` (p.11)
-#       did not make sense to us, so we opted to calculate mean frequency for each
-#       frequency band, and then take an average of that.
-#   4. The number of differential and absolute asymmetry features is increased to 
+#   3. The number of differential and absolute asymmetry features is increased to 
 #       168 from 126. We could not understand what 9 pairs were used for the calculation,
 #       so we opted to do these calculations with the 12 pairs described in 
 #       Lin et al. (2010) http://ieeexplore.ieee.org/document/5458075/.
@@ -103,6 +100,8 @@ for participant_name in PARTICIPANTS:
 
     # Need a grouped control for feature transformation as in Medeiros et al. (2021) p.12
     grouped_control_features = pd.DataFrame()
+
+    processed_files = 0
     for task_key in FILE_SUFFIXES:
         file_name = participant_name + FILE_SUFFIXES[task_key] + '_an.set'
         full_path = os.path.join(DATA_PATH, participant_name, file_name)
@@ -179,28 +178,33 @@ for participant_name in PARTICIPANTS:
         task['label3'] = TASK_CODES[task_key][3]
 
         task.to_parquet(os.path.join(STORAGE_PATH, participant_name + FILE_SUFFIXES[task_key] + '.parquet'))
+        processed_files += 1
+
+    if processed_files == 0:
+        continue
     # Group as in Medeiros et al. (2021)
     control = pd.DataFrame()  
-    seg_max = grouped_control_features.max(skipna = True, numeric_only = True).to_frame().T
-    seg_max = seg_max.add_prefix('max_')
-    seg_min = grouped_control_features.min(skipna = True, numeric_only = True).to_frame().T
-    seg_min = seg_min.add_prefix('min_')
-    seg_mean = grouped_control_features.mean(skipna = True, numeric_only = True).to_frame().T
-    seg_mean = seg_mean.add_prefix('mean_')
-    seg_std = grouped_control_features.std(skipna = True, numeric_only = True).to_frame().T
-    seg_std = seg_std.add_prefix('std_')
-    seg_median = grouped_control_features.median(skipna = True, numeric_only = True).to_frame().T
-    seg_median = seg_median.add_prefix('median_')
-
-    segment_agg = pd.concat([seg_max, seg_min, seg_mean, seg_std, seg_median], axis = 1)
-    control = pd.concat([control, segment_agg], ignore_index = True)
+    segments = split_into_segments(grouped_control_features)
+    for segment in segments:
+        seg_max = segment.max(skipna = True, numeric_only = True).to_frame().T
+        seg_max = seg_max.add_prefix('max_')
+        seg_min = segment.min(skipna = True, numeric_only = True).to_frame().T
+        seg_min = seg_min.add_prefix('min_')
+        seg_mean = segment.mean(skipna = True, numeric_only = True).to_frame().T
+        seg_mean = seg_mean.add_prefix('mean_')
+        seg_std = segment.std(skipna = True, numeric_only = True).to_frame().T
+        seg_std = seg_std.add_prefix('std_')
+        seg_median = segment.median(skipna = True, numeric_only = True).to_frame().T
+        seg_median = seg_median.add_prefix('median_')
+        segment_agg = pd.concat([seg_max, seg_min, seg_mean, seg_std, seg_median], axis = 1)
+        control = pd.concat([task, segment_agg], ignore_index = True)
     # Add labels
     control['label0'] = 1
     control['label1'] = 0
     control['label2'] = 0
     control['label3'] = 0
 
-    control.to_parquet(os.path.join(STORAGE_PATH, participant_name + 'control.parquet'))
+    control.to_parquet(os.path.join(STORAGE_PATH, participant_name + '_control.parquet'))
     
     participant_end_time = datetime.now()
     print(f'-> Processing for participant {participant_name} finished. Time to execute: {participant_end_time - participant_start_time}')

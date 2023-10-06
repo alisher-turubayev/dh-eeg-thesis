@@ -74,6 +74,9 @@ logs
 # W&B integration artifacts
 wandb/*
 wandb
+# Sklearn-related cache
+mlcache/*
+mlcache
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
