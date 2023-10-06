@@ -25,11 +25,8 @@
 #       mne
 #       scikit-learn
 #       antropy
-#       matlab.engine
 #       scipy
 #   2. Adjust DATA_PATH / STORAGE_PATH as needed
-#   3. Ensure your Matlab installation is on path or is in default location. 
-#       See https://www.mathworks.com/help/matlab/matlab-engine-for-python.html
 #   3. Run the script with:
 #       python3 ./medeiros_raw_processing.py
 #
@@ -48,7 +45,6 @@ from datetime import datetime
 import mne
 import numpy as np
 import pandas as pd
-import matlab.engine as mt
 
 import warnings
 warnings.filterwarnings("error")
@@ -91,9 +87,6 @@ os.makedirs(STORAGE_PATH, exist_ok = True)
 for file in os.listdir(STORAGE_PATH):
     os.remove(os.path.join(STORAGE_PATH, file))
 
-# Initialize matlab's engine to execute meanfreq function
-eng = mt.start_matlab()
-
 for participant_name in PARTICIPANTS:
     print(f'Processing participant {participant_name}')
     participant_start_time = datetime.now()
@@ -133,10 +126,10 @@ for participant_name in PARTICIPANTS:
 
         #### Feature Extraction
         # Extract subsections and extract features of interest
-        control_baseline_features = extract_features(df.iloc[timeframe_control_baseline[0]:timeframe_control_baseline[1]], eng)
-        control_features = extract_features(df.iloc[timeframe_control[0]:timeframe_control[1]], eng)
-        task_baseline_features = extract_features(df.iloc[timeframe_task_baseline[0]:timeframe_task_baseline[1]], eng)
-        task_features = extract_features(df.iloc[timeframe_task[0]:timeframe_task[1]], eng)
+        control_baseline_features = extract_features(df.iloc[timeframe_control_baseline[0]:timeframe_control_baseline[1]])
+        control_features = extract_features(df.iloc[timeframe_control[0]:timeframe_control[1]])
+        task_baseline_features = extract_features(df.iloc[timeframe_task_baseline[0]:timeframe_task_baseline[1]])
+        task_features = extract_features(df.iloc[timeframe_task[0]:timeframe_task[1]])
         del df
 
         #### Feature Normalization
@@ -209,7 +202,6 @@ for participant_name in PARTICIPANTS:
     participant_end_time = datetime.now()
     print(f'-> Processing for participant {participant_name} finished. Time to execute: {participant_end_time - participant_start_time}')
 
-eng.exit()
 end_time = datetime.now()
 
 print('')

@@ -17,7 +17,6 @@
 import antropy as ant
 import pandas as pd
 import numpy as np
-import matlab.engine as mt
 import pandas as pd
 import scipy.stats as scs
 import scipy.signal as sig
@@ -71,6 +70,25 @@ def split_into_segments(df):
 
     return segments
 
+# Implementation from:
+# https://stackoverflow.com/a/56487241
+def meanfreq(x, fs):
+    """
+    Returns a mean frequency estimation of the signal `x`
+
+    See https://stackoverflow.com/a/56487241
+    """
+    f, Pxx_den = sig.periodogram(x, fs)                                                    
+    Pxx_den = np.reshape(Pxx_den, (1, -1)) 
+    width = np.tile(f[1] - f[0], (1, Pxx_den.shape[1]))
+    f = np.reshape(f, (1, -1))
+    P = Pxx_den * width
+    pwr = np.sum(P)
+
+    mnfreq = np.dot(P, f.T) / pwr
+
+    return mnfreq.item()
+
 def assemble_windows_array(s, w_size, ovlp):
     """
     Creates a list of windows with size `w_size` and overlap of `ovlp` elements from splicable `s`
@@ -98,7 +116,7 @@ def assemble_windows_array(s, w_size, ovlp):
 
     return windows
 
-def extract_features(df_unprocessed, eng):
+def extract_features(df_unprocessed):
     """
     Extract all features as in Medeiros et al. (2021) pp. 10-12
 
@@ -213,7 +231,7 @@ def extract_features(df_unprocessed, eng):
             f_window['f_pwr_hglg'] = f_window['f_hi_gamma_power'] / f_window['f_low_gamma_power']
             f_window['f_pwr_hgmg'] = f_window['f_hi_gamma_power'] / f_window['f_mid_gamma_power']
             # Mean frequency
-            f_window['f_av_meanfreq'] = eng.meanfreq(window.to_numpy(copy = True))
+            f_window['f_meanfreq'] = meanfreq(window.to_numpy(copy = True), SAMPLE_RATE)
             # Brain indicies
             f_window['f_brain_index1'] = f_window['f_beta_power'] / (f_window['f_theta_power'] + f_window['f_alpha_power'])
             f_window['f_brain_index2'] = f_window['f_theta_power'] / (f_window['f_beta_power'] + f_window['f_alpha_power'])
