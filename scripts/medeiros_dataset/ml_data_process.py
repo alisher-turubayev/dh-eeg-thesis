@@ -51,7 +51,7 @@ warnings.filterwarnings("error")
 
 from ml_utils import extract_features, normalize_val, split_into_segments
 
-DATA_PATH = '~/data/medeiros_raw_extracted'
+DATA_PATH = '~/data/medeiros_processed_extracted'
 STORAGE_PATH = './data/medeiros/medeiros_processed'
 
 # Participant IDs

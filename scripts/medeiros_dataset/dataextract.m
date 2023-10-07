@@ -42,8 +42,8 @@
 locDataPath = './thesis_scripts/locdata.ced';
 
 % Define data folder and all available participants
-dataFolder = append(pwd, '/thesis_data');
-transformedDataFolder = append(pwd, '/thesis_data_transformed');
+dataFolder = '~/data/medeiros_original';
+transformedDataFolder = '~/data/medeiros_processed_extracted';
 
 % Define our participant IDs
 participants = ["S01" "S03" "S04" "S05" "S07" "S08" "S10" "S11" "S12"...
