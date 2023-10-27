@@ -21,8 +21,6 @@ def main(
     dataset_name = gin.REQUIRED,
     model_name = gin.REQUIRED
 ):
-    
-
     logger = print
     # Take current time for logging
     start_time = datetime.now()

@@ -1,0 +1,14 @@
+antropy
+gin_config
+matplotlib
+mne
+numpy
+pandas
+pyarrow
+pytorch_lightning
+shap
+scikit_learn
+scipy
+torch
+torchmetrics
+xgboost
