@@ -55,6 +55,9 @@ def split_into_segments(df):
     Split a `pandas.DataFrame` into segments. The number of segments is defined by `N_SEGMENTS`
     and is set to 4 by default.
 
+    Note: if the original `pandas.DataFrame` is not evenly divisible into four segments, 
+    the data at the end is truncated.
+
     See Medeiros et al. (2021) p. 12
     """
     nperseg = int(df.shape[0] / N_SEGMENTS)
@@ -63,10 +66,9 @@ def split_into_segments(df):
     segments = []
     for _ in range(N_SEGMENTS):
         if segment_start + nperseg > df.shape[0]:
-            segments.append(df.iloc[segment_start:df.shape[0]])
-        else: 
-            segments.append(df.iloc[segment_start:segment_start + nperseg])
-            segment_start += nperseg
+            break
+        segments.append(df.iloc[segment_start:segment_start + nperseg])
+        segment_start += nperseg
 
     return segments
 
@@ -74,7 +76,7 @@ def split_into_segments(df):
 # https://stackoverflow.com/a/56487241
 def meanfreq(x, fs):
     """
-    Returns a mean frequency estimation of the signal `x`
+    Returns a mean frequency estimation of the signal `x` with sample frequency `fs`
 
     See https://stackoverflow.com/a/56487241
     """
@@ -108,7 +110,6 @@ def assemble_windows_array(s, w_size, ovlp):
 
     while True:
         if rb > len(s):
-            windows.append(s[lb:len(s)])
             break
         windows.append(s[lb:rb])
         lb += ovlp

@@ -1,2 +1,10 @@
+# Run parameters
+run.fixed_seed = None
+run.cv_folds = 5
+run.cv_repetitions = 5
+run.epochs = 1000
+run.dataset_name = 'medeiros_raw'
+run.model_name = 'rnn'
+# Model parameters
 RNNClassifier.hidden_size = 136
 RNNClassifier.n_layers = 5

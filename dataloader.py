@@ -28,7 +28,7 @@ class MedeirosDataset(Dataset):
             # Store the number of samples
             self.n_samples = data.shape[0]
             # Transpose the [n_rows, n_cols] to [n_cols, n_rows]
-            self._cached_dataset = (torch.transpose(data, 0, 1), label)
+            self._cached_dataset = (torch.transpose(data, 0, 1), labels)
 
     def __len__(self):
         return self.n_samples

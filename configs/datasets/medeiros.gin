@@ -1,1 +1,2 @@
+run.dataset_name = 'medeiros'
 MedeirosDataset.path = './data/medeiros/medeiros_processed/'

@@ -190,7 +190,7 @@ for participant_name in PARTICIPANTS:
         seg_median = segment.median(skipna = True, numeric_only = True).to_frame().T
         seg_median = seg_median.add_prefix('median_')
         segment_agg = pd.concat([seg_max, seg_min, seg_mean, seg_std, seg_median], axis = 1)
-        control = pd.concat([task, segment_agg], ignore_index = True)
+        control = pd.concat([control, segment_agg], ignore_index = True)
     # Add labels
     control['label0'] = 1
     control['label1'] = 0

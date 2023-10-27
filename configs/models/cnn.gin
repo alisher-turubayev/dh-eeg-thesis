@@ -1,3 +1,11 @@
+# Run parameters
+run.fixed_seed = None
+run.cv_folds = 5
+run.cv_repetitions = 5
+run.epochs = 1000
+run.dataset_name = 'medeiros_raw'
+run.model_name = 'cnn'
+# Model parameters
 CNNClassifier.hidden_size = 120
 CNNClassifier.kernel_size = 20
 CNNClassifier.stride = 1
