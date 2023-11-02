@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import make_scorer, accuracy_score, f1_score, precision_score, recall_score
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.multiclass import OneVsOneClassifier
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
@@ -133,7 +133,11 @@ def fit(dataset, model_name, cv_folds, cv_repetitions, logger, checkpoint_path, 
     # Make sure that the one-hot encoding is reversed before feeding the data into the ML algorithms
     y.rename(columns = {'label0': 0, 'label1': 1, 'label2': 2, 'label3': 3,}, inplace = True)
     y = y.idxmax(1)
-    
+
+    # Create empty arrays to keep track of best performing models across repetitions
+    best_accuracies = []
+    best_models = []
+
     config['dataset'] = type(dataset).__name__
     wandb.init(project = "dh-eeg-thesis", config = config)
     # To make sure that the results are not cross-contaminated between repetitions,
@@ -179,9 +183,10 @@ def fit(dataset, model_name, cv_folds, cv_repetitions, logger, checkpoint_path, 
         gs.fit(X, y)
         # Dump best model for fold to checkpoint directory
         fold_clf = gs.best_estimator_
-        pickle.dump(fold_clf, open(os.path.join(checkpoint_path, model_name + f'rep{i}.sav'), 'wb'))
+        best_models.append(fold_clf)
         # Get fold results
         fold_best_accuracy = gs.best_score_
+        best_accuracies.append(fold_best_accuracy)
         fold_results = gs.cv_results_
         # Plot CEV for PCA and log the resulting plot
         cev = np.cumsum(fold_clf['reduce_dim'].explained_variance_ratio_)
@@ -218,5 +223,64 @@ def fit(dataset, model_name, cv_folds, cv_repetitions, logger, checkpoint_path, 
         logger('-------------------')
         logger(f'Finished repetition {i}. Best accuracy: {fold_best_accuracy}. Time to run: {end_time - start_time}')
     
+    # Plot all repetition accuracies
+    fig = plt.figure()
+    plt.style.use('seaborn-v0_8-pastel')
+    plt.boxplot(best_accuracies, labels = [f'Mean accuracy across repetitions'])
+    wandb.log({f'test_accuracy_cv': wandb.Image(fig)})
+    plt.close(fig)
+
+    # Determine best model from repetitions
+    best_idx = np.argmax(best_accuracies)
+    best_clf = best_models[best_idx]
+
+    # Create a pipeline again but replace the model parameters with the best parameters found in GridSearchCV
+    pipeline_params = [
+            ('scaling', StandardScaler()),
+            ('reduce_dim', PCA()),
+        ]
+    if model_name == 'svm':
+        pipeline_params.append(('model', OneVsOneClassifier(LinearSVC())))
+    else:
+        pipeline_params.append(('model', xgb.XGBClassifier()))
+    pipe = Pipeline(pipeline_params)
+    pipe.set_params(**best_clf.get_params())
+
+    # Create a split (note that our data is in DataFrame, necessitating using StratifiedKFold instead of train_test_split)
+    skf = StratifiedKFold(n_splits = 2, shuffle = True)
+    for i, (train_indices, test_indices) in enumerate(skf.split(X, y)):
+        X_train = X.loc[X.index[train_indices]]
+        y_train = y.loc[y.index[train_indices]]
+        X_test = X.loc[X.index[test_indices]]
+        y_test = y.loc[y.index[test_indices]]
+
+        y_train = np.array(y_train.values)
+        y_test = np.array(y_test.values)
+        break
+
+    # Fit the model
+    pipe.fit(X_train, y_train)
+    # Test the model
+    y_pred = pipe.predict(X_test)
+
+    # Plot CEV for PCA and log the resulting plot
+    cev = np.cumsum(pipe['reduce_dim'].explained_variance_ratio_)
+    fig = plt.figure()
+    plt.style.use('seaborn-v0_8-pastel')
+    plt.plot(cev)
+    plt.ylabel('cumulative explained variance')
+    plt.xlabel('component #')
+    wandb.log({f'final_pca_cev': wandb.Image(fig)})
+    plt.close(fig)
+    # Log metrics of interest
+    wandb.log({'final_accuracy': accuracy_score(y_test, y_pred)})
+    wandb.log({'final_precision': precision_score(y_test, y_pred, average = 'macro', zero_division = 0)})
+    wandb.log({'final_recall': recall_score(y_test, y_pred, average = 'macro', zero_division = 0)})
+    wandb.log({'final_f1_score': f1_score(y_test, y_pred, average = 'macro', zero_division = 0)})
+    # Plot confusion matrix using W&B integration
+    wandb.sklearn.plot_confusion_matrix(y_test, y_pred, labels = ['Control Task', 'Task 1', 'Task 2', 'Task 3'])
+    # Save the final model for interpretability study
+    pickle.dump(pipe, open(os.path.join(checkpoint_path, 'svm_final.sav'), 'wb'))
+    # Close the W&B connection
     wandb.finish()
     return
