@@ -100,7 +100,7 @@ if __name__ == '__main__':
     model_name = args['model']
     dataset_name = args['dataset']
 
-    assert (model_name == 'svm' or model_name == 'xgboost') and (not 'raw' in dataset_name), 'Cannot use `raw` dataset with ML models'
+    assert not ((model_name == 'svm' or model_name == 'xgboost') and ('raw' in dataset_name)), 'Cannot use `raw` dataset with ML models'
 
     try:
         gin.parse_config_file(f'configs/models/{model_name}.gin')   

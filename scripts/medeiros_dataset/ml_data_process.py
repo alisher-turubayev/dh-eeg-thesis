@@ -53,6 +53,7 @@ from ml_utils import extract_features, normalize_val, split_into_segments
 
 DATA_PATH = '~/data/medeiros_processed_extracted'
 STORAGE_PATH = './data/medeiros/medeiros_processed'
+FINAL_FILE_NAME = 'medeiros_processed.parquet'
 
 # Participant IDs
 PARTICIPANTS = ['S01', 'S03', 'S04', 'S05', 'S07', 'S08', 'S10', 'S11', 'S12',
@@ -65,14 +66,6 @@ FILE_SUFFIXES = {
     'task2': 'R02', 
     'task3': 'R03'
     }
-# One-hot encoding for labels
-TASK_CODES = {
-    'control': [1, 0, 0, 0], 
-    'task1': [0, 1, 0, 0], 
-    'task2': [0, 0, 1, 0], 
-    'task3': [0, 0, 0, 1]
-    }
-TASK_COL_LABELS = ['sample_index', 'label0', 'label1', 'label2', 'label3']
 
 start_time = datetime.now()
 
@@ -86,6 +79,12 @@ os.makedirs(STORAGE_PATH, exist_ok = True)
 # Remove files where to store if exists (we are overriding it)
 for file in os.listdir(STORAGE_PATH):
     os.remove(os.path.join(STORAGE_PATH, file))
+
+# Initialize the collection point
+# Note: this edit was made to speed up processing after we found that IO operations
+#    were expensive and added a large processing overhead for both this script and the ML model training
+task = pd.DataFrame()
+control = pd.DataFrame()
 
 for participant_name in PARTICIPANTS:
     print(f'Processing participant {participant_name}')
@@ -132,6 +131,11 @@ for participant_name in PARTICIPANTS:
         task_features = extract_features(df.iloc[timeframe_task[0]:timeframe_task[1]])
         del df
 
+        # Sanity check - see if any NaNs made it into the dataset - ideally, there should be no NaN values
+        # Expensive OP, see if can be commented out - https://stackoverflow.com/a/29530601
+        num_nans = control_baseline_features.isnull().sum().sum() + control_features.isnull().sum().sum() + task_baseline_features.isnull().sum().sum() + task_features.isnull().sum().sum()
+        print(f'  Sanity check: found NaNs after feature extraction step: {num_nans}')
+
         #### Feature Normalization
         for column in control_baseline_features.columns:
             column_mean = control_baseline_features[column].mean()
@@ -141,15 +145,14 @@ for participant_name in PARTICIPANTS:
             column_mean = task_baseline_features[column].mean()
             task_features[column] = task_features[column].apply(lambda x: normalize_val(x, column_mean))
 
-        # Known to produce 0s because power can be close to 0 and therefore eval to 0 in some cases
-        # Floating point shenanigans :3
-        control_features = control_features.fillna(0.0)
-        task_features = task_features.fillna(0.0)
+        # Sanity check - see if any NaNs made it into the dataset - ideally, there should be no NaN values
+        # Expensive OP, see if can be commented out - https://stackoverflow.com/a/29530601
+        num_nans = control_features.isnull().sum().sum() + task_features.isnull().sum().sum()
+        print(f'  Sanity check: found NaNs after feature normalization step: {num_nans}')
 
         grouped_control_features = pd.concat([grouped_control_features, control_features], ignore_index = True)
         #### Feature Transformation
         # Note that feature transformation for the control task takes place outside of this for loop
-        task = pd.DataFrame()
         segments = split_into_segments(task_features)
         for segment in segments:
             seg_max = segment.max(skipna = True, numeric_only = True).to_frame().T
@@ -163,20 +166,13 @@ for participant_name in PARTICIPANTS:
             seg_median = segment.median(skipna = True, numeric_only = True).to_frame().T
             seg_median = seg_median.add_prefix('median_')
             segment_agg = pd.concat([seg_max, seg_min, seg_mean, seg_std, seg_median], axis = 1)
+            segment_agg['label'] = task_key
             task = pd.concat([task, segment_agg], ignore_index = True)
-        # Add labels
-        task['label0'] = 0
-        task['label1'] = TASK_CODES[task_key][1]
-        task['label2'] = TASK_CODES[task_key][2]
-        task['label3'] = TASK_CODES[task_key][3]
-
-        task.to_parquet(os.path.join(STORAGE_PATH, participant_name + FILE_SUFFIXES[task_key] + '.parquet'))
         processed_files += 1
 
     if processed_files == 0:
         continue
     # Group as in Medeiros et al. (2021)
-    control = pd.DataFrame()  
     segments = split_into_segments(grouped_control_features)
     for segment in segments:
         seg_max = segment.max(skipna = True, numeric_only = True).to_frame().T
@@ -190,17 +186,18 @@ for participant_name in PARTICIPANTS:
         seg_median = segment.median(skipna = True, numeric_only = True).to_frame().T
         seg_median = seg_median.add_prefix('median_')
         segment_agg = pd.concat([seg_max, seg_min, seg_mean, seg_std, seg_median], axis = 1)
+        segment_agg['label'] = 'control'
         control = pd.concat([control, segment_agg], ignore_index = True)
-    # Add labels
-    control['label0'] = 1
-    control['label1'] = 0
-    control['label2'] = 0
-    control['label3'] = 0
-
-    control.to_parquet(os.path.join(STORAGE_PATH, participant_name + '_control.parquet'))
     
     participant_end_time = datetime.now()
     print(f'-> Processing for participant {participant_name} finished. Time to execute: {participant_end_time - participant_start_time}')
+
+# Sanity check - see if any NaNs made it into the dataset - ideally, there should be no NaN values
+# Expensive OP, see if can be commented out - https://stackoverflow.com/a/29530601
+num_nans = control.isnull().sum().sum() + task.isnull().sum().sum()
+print(f'  Sanity check: found NaNs after feature engineering completed: {num_nans}')
+
+pd.concat([control, task], ignore_index = True).to_parquet(os.path.join(STORAGE_PATH, FINAL_FILE_NAME))
 
 end_time = datetime.now()
 

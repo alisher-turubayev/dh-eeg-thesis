@@ -1,5 +1,6 @@
 import os
 import gin
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
@@ -19,32 +20,26 @@ class MedeirosDataset(Dataset):
         if self._cached_dataset is None:
             data, labels = self.get_data()
             # Store as tensor
-            data = torch.tensor(data.values)
-            labels = torch.tensor(labels.values)
+            data = torch.tensor(data)
+            labels = torch.tensor(labels)
             # Cast both to tensor double type
             # Weird behaviour - not sure why .double() doesn't work but .float does
             data = data.float()
             labels = labels.float()
             # Store the number of samples
             self.n_samples = data.shape[0]
-            # Transpose the [n_rows, n_cols] to [n_cols, n_rows]
-            self._cached_dataset = (torch.transpose(data, 0, 1), labels)
+            # Note: one-dimensional data so no transpose is needed
+            self._cached_dataset = [(data[i], labels[i]) for i in range(data.shape[0])]
 
     def __len__(self):
+        if self.n_samples == -1:
+            self.cache_to_ram()
         return self.n_samples
     
     def __getitem__(self, idx):
+        if self._cached_dataset is None:
+            self.cache_to_ram()
         return self._cached_dataset[idx]
-
-    def _debug_check_for_nans(self, data, labels):
-        if data.isnull().values.any():
-            print('NaNs found in data')
-            print(data.isnull())
-            exit(-1)
-        if labels.isnull().values.any():
-            print('NaNs found in labels')
-            print(labels.isnull())
-            exit(-1)
 
     def get_data(self):
         # Get all files in the `path` directory
@@ -56,12 +51,14 @@ class MedeirosDataset(Dataset):
 
         for file in files:
             curr_df = pd.read_parquet(file)
-            labels = pd.concat([labels, curr_df[['label0', 'label1', 'label2', 'label3']]], ignore_index = True)
-            data = pd.concat([data, curr_df.drop(columns = ['label0', 'label1', 'label2', 'label3'])], ignore_index = True)
-
-        self._debug_check_for_nans(data, labels)
+            labels = pd.concat([labels, curr_df['label']], ignore_index = True)
+            data = pd.concat([data, curr_df.drop(columns = ['label'])], ignore_index = True)
 
         del curr_df
+
+        # Transform the data and labels into numpy arrays
+        data = data.to_numpy()
+        labels = np.ravel(labels.to_numpy())
         return data, labels
 
     def get_data_shape(self):
