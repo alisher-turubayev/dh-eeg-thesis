@@ -1,0 +1,22 @@
+program: main.py
+method: grid
+metric:
+  name: mean_fold_acc
+  goal: maximize
+parameters:
+  pca_cev: 
+    values: [0.7, 0.8, 0.85, 0.9, 0.95]
+  svm_dual: 
+    value: True
+  svm_C: 
+    values: [0.0009765625, 0.00390625, 0.015625, 0.0625, 0.25, 1, 4, 16]
+  svm_max_iter: 
+    values: [1000, 2000]
+command:
+  - .\venv\Scripts\python.exe
+  - ${program}
+  - "-m"
+  - "svm"
+  - "-d"
+  - "medeiros"
+  - ${args_no_boolean_flags}

@@ -1,0 +1,26 @@
+program: main.py
+method: grid
+metric:
+  name: mean_fold_acc
+  goal: maximize
+parameters:
+  cnn_hidden_size:
+    values: [120]
+  cnn_kernel_size:
+    values: [20]
+  cnn_stride:
+    values: [1]
+  cnn_maxpool_kernel_size:
+    values: [20]
+  cnn_nn_size: 
+    values: [100]
+  cnn_dropout_rate:
+    values: [0.5]
+command:
+  - .\venv\Scripts\python.exe
+  - ${program}
+  - "-m"
+  - "cnn"
+  - "-d"
+  - "medeiros_raw"
+  - ${args}

@@ -179,7 +179,7 @@ def extract_features(df_unprocessed):
             f_window['f_theta_rel_power'] = f_window['f_theta_power'] / f_window['f_total_power']
             f_window['f_alpha_power'] = simpson(psd[idx_alpha], dx = freqs_res)
             f_window['f_alpha_rel_power'] = f_window['f_alpha_power'] / f_window['f_total_power']
-            f_window['f_beta_power'] = simpson(psd[idx_theta], dx = freqs_res)
+            f_window['f_beta_power'] = simpson(psd[idx_beta], dx = freqs_res)
             f_window['f_beta_rel_power'] = f_window['f_beta_power'] / f_window['f_total_power']
             f_window['f_low_gamma_power'] = simpson(psd[idx_low_gamma], dx = freqs_res)
             f_window['f_low_gamma_rel_power'] = f_window['f_low_gamma_power'] / f_window['f_total_power']

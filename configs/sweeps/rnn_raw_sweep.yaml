@@ -1,0 +1,18 @@
+program: main.py
+method: grid
+metric:
+  name: mean_fold_acc
+  goal: maximize
+parameters:
+  rnn_hidden_size:
+    values: [128]
+  rnn_n_layers:
+    values: [5]
+command:
+  - .\venv\Scripts\python.exe
+  - ${program}
+  - "-m"
+  - "rnn"
+  - "-d"
+  - "medeiros_raw"
+  - ${args}

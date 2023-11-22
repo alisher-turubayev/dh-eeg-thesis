@@ -1,25 +1,6 @@
 # Run parameters
-run.fixed_seed = None
+run.fixed_seed = 1
 run.cv_folds = 5
 run.cv_repetitions = 5
 run.epochs = None
 run.model_name = 'xgboost'
-# Model parameters
-fit_params.grid_params = {
-    'reduce_dim__n_components': [1, 5, 10, 100, 200, None],
-    'model__eval_metric': ['merror'],
-    'model__objective': ['softmax'],
-    'model__max_depth': [3, 6, 8, 10],
-    'model__tree_method': ['hist'],
-}
-
-fit_params.config = {
-    'cv_folds': 5,
-    'cv_repetitions': 5,
-    'PCA_n_components': [1, 5, 10, 100, 200, None],
-    'model': 'XGBoost',
-    'model__eval_metric': 'merror',
-    'model__objective': 'softmax',
-    'model__max_depth': [3, 6, 8, 10],
-    'model__tree_method': 'hist',
-}

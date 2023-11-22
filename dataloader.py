@@ -123,8 +123,8 @@ class MedeirosDatasetRaw(Dataset):
         x, y = self[0]
         return x.shape, y.shape
 
-@gin.configurable('PeitekDataset')
-class PeitekDataset(Dataset):
+@gin.configurable('CustomDataset')
+class CustomDataset(Dataset):
     def __init__(self):
         super().__init__()
         self.is_raw = False
@@ -144,8 +144,8 @@ class PeitekDataset(Dataset):
     def get_data_shape(self):
         raise NotImplementedError()
 
-@gin.configurable('PeitekDatasetRaw')
-class PeitekDatasetRaw(Dataset):
+@gin.configurable('CustomDatasetRaw')
+class CustomDatasetRaw(Dataset):
     def __init__(self):
         super().__init__()
         self.is_raw = True
