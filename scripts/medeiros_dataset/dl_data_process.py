@@ -44,9 +44,9 @@ STORAGE_PATH = './data/medeiros/medeiros_raw'
 METADATA_FILEPATH = os.path.join(STORAGE_PATH, 'metadata.csv')
 WINDOW_SIZE = 2000 # in milliseconds
 
-PARTICIPANTS = ['S01', 'S03', 'S04', 'S05', 'S07', 'S08', 'S10', 'S11', 'S12',
-    'S13', 'S14', 'S16', 'S17', 'S18', 'S19', 'S20', 'S21', 'S22', 'S23', 'S24',
-    'S25', 'S26', 'S27', 'S28', 'S29', 'S30']
+PARTICIPANTS = ['S01', 'S03', 'S04', 'S05', 'S07', 'S08', 'S09', 'S10', 'S11', 
+    'S12', 'S13', 'S14', 'S16', 'S17', 'S18', 'S19', 'S20', 'S21', 'S22', 'S23', 
+    'S24', 'S25', 'S26', 'S27', 'S28', 'S29', 'S30']
 # File associations
 FILE_SUFFIXES = {
     'task1': 'R01_an.set', 

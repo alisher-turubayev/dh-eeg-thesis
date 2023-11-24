@@ -7,14 +7,14 @@ import numpy as np
 
 from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, make_scorer
-from sklearn.model_selection import RepeatedStratifiedKFold, cross_validate
+from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold, cross_validate
 from sklearn.multiclass import OneVsOneClassifier
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
 import torch
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import SubsetRandomSampler, DataLoader, random_split
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
@@ -30,48 +30,38 @@ import xgboost as xgb
 import wandb
 
 @gin.configurable('train_params')
-def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger, checkpoint_path):
+def train_test_loop(dataset, model_name, epochs, rng, cv_folds, cv_repetitions, logger, args):
     # Determine if GPU acceleration is available
     if torch.cuda.is_available(): 
         dev = "cuda:0" 
     else: 
         dev = "cpu" 
     device = torch.device(dev)
+    
+    wandb.init(project = "dh-eeg-thesis", config = args)
+    # Store the dataset in memory
+    dataset.cache_to_ram()
 
     # Determine the shape of the data to initalize our DL model
     data_shape, label_shape = dataset.get_data_shape()
-    # Input size is # of data channels (if the dataset is in raw format) or # of features
+    # Input size is # of data channels
     input_size = data_shape[0]
     # Output size is # of classes to predict
     output_size = label_shape[0]
-    # Window size is # of datapoints per sample (if the dataset is in raw format) or None to indicate that data is tabular
-    window_datapoints = data_shape[1] if dataset.is_raw else None
+    # Window size is # of datapoints per sample
+    window_datapoints = data_shape[1]
+    # Get non-one-hot encoded labels for StratifiedKFold
+    labels_strat = dataset.get_strat_labels()
     # Make a split of the dataset
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [0.6, 0.2, 0.2])
+    train_val_idx, test_idx = train_test_split(range(len(dataset)), random_state = rng, test_size = 0.2, stratify = labels_strat)
 
-    # Cache to RAM both the train and validation datasets - they are accessed each epoch
-    #   Because the ouput of random_split is a class `Subset`, we need to access its' property rather than calling function directly
-    train_dataset.dataset.cache_to_ram()
-    val_dataset.dataset.cache_to_ram()
+    # Initialize dataloader for the test indicies
+    test_loader = DataLoader(dataset, batch_size = len(test_idx), sampler = SubsetRandomSampler(test_idx), num_workers = min(os.cpu_count(), 4))
 
-    # Initialize dataloaders
-    train_loader = DataLoader(train_dataset, batch_size = 4, shuffle = True, num_workers = min(os.cpu_count(), 4))
-    val_loader = DataLoader(val_dataset, batch_size = 4, shuffle = False, num_workers = min(os.cpu_count(), 4))
-    test_loader = DataLoader(test_dataset, batch_size = 4, shuffle = False, num_workers = min(os.cpu_count(), 4))
+    train_val_labels = np.take(labels_strat, train_val_idx)
+    # Initialize RepeatedStatifiedKFold
+    skf = RepeatedStratifiedKFold(n_splits = cv_folds, n_repeats = cv_repetitions, random_state = rng)
 
-    if model_name == 'cnn':
-        model = CNNClassifier(input_size, output_size, window_datapoints)
-    else: 
-        model = RNNClassifier(input_size, output_size, window_datapoints)
-
-    # Enable checkpointing
-    checkpoint_callback = ModelCheckpoint(
-        monitor = 'val_acc',
-        mode = 'max',
-        dirpath = checkpoint_path,
-        filename = model_name + '-' + dataset.__class__.__name__ + '-{epoch:02d}-{val_acc:.2f}',
-        verbose = True
-    )
     # Enable early stopping
     earlystopping_callback = EarlyStopping(
         patience = 10,
@@ -81,26 +71,32 @@ def train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logge
         verbose = True
     )
 
-    wandb_logger = WandbLogger(project = "dh-eeg-thesis")
-    trainer = pl.Trainer(logger = wandb_logger, max_epochs = epochs, callbacks = [checkpoint_callback, earlystopping_callback])
-    
-    logger('--------------------')
-    logger('Starting training...')
+    # Start the cross-validation
+    for i, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(train_val_labels)), train_val_labels)):
+        # Initialize train/val loaders
+        train_loader = DataLoader(dataset, batch_size = 4, sampler = SubsetRandomSampler(train_idx), num_workers = min(os.cpu_count(), 4))
+        val_loader = DataLoader(dataset, batch_size = 4, sampler = SubsetRandomSampler(val_idx), num_workers = min(os.cpu_count(), 4))
 
-    start_time = datetime.now()
-    
-    trainer.fit(model, train_dataloaders = train_loader, val_dataloaders = val_loader)
+        # Initialize the model
+        if model_name == 'cnn':
+            model = CNNClassifier(input_size, output_size, window_datapoints)
+        else: 
+            model = RNNClassifier(input_size, output_size, window_datapoints, args['rnn_hidden_size'], args['rnn_n_layers'], i)
 
-    end_time = datetime.now()
+        logger('--------------------')
+        logger(f'Starting fold {i}...')
+        start_time = datetime.now()
+        trainer = pl.Trainer(max_epochs = epochs, callbacks = [earlystopping_callback])
+        trainer.fit(model, train_dataloaders = train_loader, val_dataloaders = val_loader)
+        end_time = datetime.now()
+        logger('-------------------')
+        logger(f'Training for fold {i} complete. Total time to train: {end_time - start_time}')
 
-    logger('-------------------')
-    logger(f'Training complete. Total time to train: {end_time - start_time}')
-
-    logger('Starting testing...')
-    start_time = datetime.now()
-    trainer.test(model, dataloaders = test_loader)
-    end_time = datetime.now()
-    logger(f'Testing complete. Time to test {end_time - start_time}')
+        logger(f'Starting testing on fold {i}...')
+        start_time = datetime.now()
+        trainer.test(model, dataloaders = test_loader)
+        end_time = datetime.now()
+        logger(f'Testing complete for fold {i}. Time to test {end_time - start_time}')
 
     wandb.finish()
     return
@@ -128,9 +124,9 @@ def fit(dataset, model_name, rng, cv_folds, cv_repetitions, logger, args):
     wandb.init(project = "dh-eeg-thesis", config = args)
     # Initialize model
     pipeline_params = [
-            ('scaling', StandardScaler()),
-            ('reduce_dim', PCA(n_components = wandb.config['pca_cev'], random_state = rng)),
-        ]
+        ('scaling', StandardScaler()),
+        ('reduce_dim', PCA(n_components = wandb.config['pca_cev'], random_state = rng)),
+    ]
     if model_name == 'svm':
         pipeline_params.append((
             'model', 
@@ -146,12 +142,14 @@ def fit(dataset, model_name, rng, cv_folds, cv_repetitions, logger, args):
     else:
         pipeline_params.append((
             'model', 
-            xgb.XGBClassifier(
-                eval_metric = wandb.config['xgb_eval_metric'],
-                objective = wandb.config['xgb_objective'],
-                max_depth = wandb.config['xgb_max_depth'],
-                tree_method = wandb.config['xgb_tree_method'],
-                random_state = rng
+            OneVsOneClassifier(
+                xgb.XGBClassifier(
+                    eval_metric = wandb.config['xgb_eval_metric'],
+                    objective = wandb.config['xgb_objective'],
+                    max_depth = wandb.config['xgb_max_depth'],
+                    tree_method = wandb.config['xgb_tree_method'],
+                    random_state = rng
+                )
             )
         ))
     pipe = Pipeline(pipeline_params)

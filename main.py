@@ -33,6 +33,7 @@ def main(
         if model_name in ['svm', 'xgboost']:
             rng = np.random.RandomState(fixed_seed)
         else:
+            rng = np.random.RandomState(fixed_seed)
             seed_everything(fixed_seed, workers = True)
         logger(f'Set fixed seed {fixed_seed}')
 
@@ -52,7 +53,7 @@ def main(
         train.fit(dataset, model_name, rng, cv_folds, cv_repetitions, logger, args)
     else:
         logger(f'Starting training for {epochs} epochs: {model_name} with {cv_folds} folds / {cv_repetitions} repetitions')
-        train.train_test_loop(dataset, model_name, epochs, cv_folds, cv_repetitions, logger, args)
+        train.train_test_loop(dataset, model_name, epochs, rng, cv_folds, cv_repetitions, logger, args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

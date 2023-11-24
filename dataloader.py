@@ -86,6 +86,12 @@ class MedeirosDatasetRaw(Dataset):
         self.is_raw = True
         self._cached_dataset = None
 
+    def get_strat_labels(self):
+        labels = self.metadata.drop(columns = ['sample_index'])
+        labels.rename(columns = {'label0': 0, 'label1': 1, 'label2': 2, 'label3': 3,}, inplace = True)
+        labels = labels.idxmax(1)
+        return np.ravel(labels.to_numpy())
+
     def cache_to_ram(self):
         if self._cached_dataset is None:
             self._cached_dataset = [self[i] for i in range(len(self))]

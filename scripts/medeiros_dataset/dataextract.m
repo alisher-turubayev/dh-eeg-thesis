@@ -9,7 +9,7 @@
 % Medeiros, J., Couceiro, R., Duarte, G., Durães, J., Castelhano, J., 
 %   Duarte, C., Castelo-Branco, M., Madeira, H., de Carvalho, P., & 
 %   Teixeira, C. (2021). Can EEG Be Adopted as a Neuroscience Reference 
-%   for Assessing Software Programmers% Cognitive Load? Sensors, 21(7), 
+%   for Assessing Software Programmers' Cognitive Load? Sensors, 21(7), 
 %   2338. https://doi.org/10.3390/s21072338
 % 
 % Work completed as part of the Master's Thesis for M.Sc. Digital Health
@@ -28,7 +28,7 @@
 % 2. Change transformedDataFolder variable to change where to store 
 %       processed data as needed
 % 3. Change the list of participants to process - by default, the 
-%       list is 26 participants
+%       list is 27 participants
 %
 % Make sure the EEGLAB is in the current working directory or uncomment 
 % and adjust the addpath parameter to point to EEGLAB folder - otherwise, 
@@ -46,9 +46,9 @@ dataFolder = '~/data/medeiros_original';
 transformedDataFolder = '~/data/medeiros_processed_extracted';
 
 % Define our participant IDs
-participants = ["S01" "S03" "S04" "S05" "S07" "S08" "S10" "S11" "S12"...
-    "S13" "S14" "S16" "S17" "S18" "S19" "S20" "S21" "S22" "S23" "S24"...
-    "S25" "S26" "S27" "S28" "S29" "S30"];
+participants = ["S01" "S03" "S04" "S05" "S07" "S08" "S09" "S10" "S11" ...
+    "S12" "S13" "S14" "S16" "S17" "S18" "S19" "S20" "S21" "S22" "S23" ...
+    "S24" "S25" "S26" "S27" "S28" "S29" "S30"];
 
 % Loop over folders in the directory
 %   1x4 so iterate over second dimension 

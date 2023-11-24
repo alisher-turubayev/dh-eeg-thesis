@@ -3,8 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchmetrics.classification as mtr
 import pytorch_lightning as pl
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from utils import perclass_accuracy
+import wandb
 
 @gin.configurable('RNNClassifier')
 class RNNClassifier(pl.LightningModule):
@@ -13,8 +15,9 @@ class RNNClassifier(pl.LightningModule):
         input_size,
         output_size,
         window_size,
-        hidden_size = gin.REQUIRED,
-        n_layers = gin.REQUIRED
+        hidden_size,
+        n_layers,
+        fold_idx
     ):
         super().__init__()
         # Use keyed arguments instead of positional arguments
@@ -29,20 +32,8 @@ class RNNClassifier(pl.LightningModule):
             nn.Linear(n_layers * hidden_size, output_size),
             nn.Softmax(dim = 1)
         )
-
-        # Determine task 
-        if output_size == 1:
-            metrics_task = "binary"
-            self.loss_fn = F.binary_cross_entropy
-        else:
-            metrics_task = "multiclass"
-            self.loss_fn = F.cross_entropy
-
-        # Register metrics
-        self.acc = mtr.Accuracy(task = metrics_task, num_classes = output_size, average = 'macro')
-        self.prec = mtr.Precision(task = metrics_task, num_classes = output_size, average = 'macro')
-        self.recall = mtr.Recall(task = metrics_task, num_classes = output_size, average = 'macro')
-        self.f1score = mtr.F1Score(task = metrics_task, num_classes = output_size, average = 'macro')
+        self.loss_fn = F.cross_entropy
+        self.idx = fold_idx
 
     def training_step(self, batch, _):
         x, y = batch
@@ -64,9 +55,9 @@ class RNNClassifier(pl.LightningModule):
         # Remove the second dimension
         h = torch.flatten(h, 1, 2)
         # Because we only need the last output (many-to-one RNN), we only take output at the very end
-        pred_y = self.activation(h)
+        y_pred = self.activation(h)
 
-        loss = self.loss_fn(pred_y, y)
+        loss = self.loss_fn(y_pred, torch.argmax(y, dim = 1))
 
         self.log('train_step_loss', loss)
         return loss
@@ -85,18 +76,11 @@ class RNNClassifier(pl.LightningModule):
             _, h = self.model(x_t, h)
         h = torch.transpose(h, 0, 1)
         h = torch.flatten(h, 1, 2)
-        pred_y = self.activation(h)
+        y_pred = self.activation(h)
 
-        loss = self.loss_fn(pred_y, y)
-        self.acc(pred_y, y)
-        
+        loss = self.loss_fn(y_pred, torch.argmax(y, dim = 1))
         self.log('val_step_loss', loss)
-        self.log('val_acc', self.acc)
         return loss
-
-    def on_validation_end(self):
-        self.acc.reset()
-        return super().on_validation_end()
 
     def test_step(self, batch, _):
         x, y = batch
@@ -112,17 +96,22 @@ class RNNClassifier(pl.LightningModule):
             _, h = self.model(x_t, h)
         h = torch.transpose(h, 0, 1)
         h = torch.flatten(h, 1, 2)
-        pred_y = self.activation(h)
+        y_pred = self.activation(h)
 
-        # Update metrics
-        self.prec(pred_y, y)
-        self.recall(pred_y, y)
-        self.f1score(pred_y, y)
+        # Transform y_pred from probabilities to actual prediction
+        y_pred = torch.argmax(y_pred, dim = 1)
+        y = torch.argmax(y, dim = 1)
 
-        # Log metrics
-        self.log('precision', self.prec)
-        self.log('recall', self.recall)
-        self.log('f1score', self.f1score)
-
+        wandb.log({
+            'fold_acc': accuracy_score(y, y_pred),
+            'fold_acc_class0': perclass_accuracy(y, y_pred, class_pos = 0),
+            'fold_acc_class1': perclass_accuracy(y, y_pred, class_pos = 1),
+            'fold_acc_class2': perclass_accuracy(y, y_pred, class_pos = 2),
+            'fold_acc_class3': perclass_accuracy(y, y_pred, class_pos = 3),
+            'fold_precision': precision_score(y, y_pred, average = 'micro'),
+            'fold_recall': recall_score(y, y_pred, average = 'micro'),
+            'fold_f1_score': f1_score(y, y_pred, average = 'micro')
+        })
+    
     def configure_optimizers(self):
         return optim.Adam(self.model.parameters(), lr = 0.001, weight_decay = 0.01)
