@@ -2,5 +2,5 @@
 run.fixed_seed = 1
 run.cv_folds = 5
 run.cv_repetitions = 5
-run.epochs = 1000
+run.epochs = 200
 run.model_name = 'cnn'

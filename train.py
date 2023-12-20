@@ -50,6 +50,8 @@ def train_test_loop(dataset, model_name, epochs, rng, cv_folds, cv_repetitions, 
     output_size = label_shape[0]
     # Window size is # of datapoints per sample
     window_datapoints = data_shape[1]
+
+    print(f'debug: input size {input_size}, {output_size}, {window_datapoints}')
     # Get non-one-hot encoded labels for StratifiedKFold
     labels_strat = dataset.get_strat_labels()
     # Make a split of the dataset
@@ -97,6 +99,7 @@ def train_test_loop(dataset, model_name, epochs, rng, cv_folds, cv_repetitions, 
         trainer.test(model, dataloaders = test_loader)
         end_time = datetime.now()
         logger(f'Testing complete for fold {i}. Time to test {end_time - start_time}')
+        break
 
     wandb.finish()
     return

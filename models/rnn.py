@@ -29,10 +29,10 @@ class RNNClassifier(pl.LightningModule):
             batch_first = True
         )
         self.activation = nn.Sequential(
-            nn.Linear(n_layers * hidden_size, output_size),
+            nn.Linear(hidden_size, output_size),
             nn.Softmax(dim = 1)
         )
-        self.loss_fn = F.cross_entropy
+        self.loss_fn = F.mse_loss
         self.idx = fold_idx
 
     def training_step(self, batch, _):
@@ -40,24 +40,18 @@ class RNNClassifier(pl.LightningModule):
         # Move to device (because the tensor by default is on CPU)
         x = x.to(self.device)
         y = y.to(self.device)
-        # Transpose x to conform to RNN input (to [batch_size, num_observations, num_channels)
+        # Transpose x to conform to RNN input (to [batch_size, num_observations, num_channels])
         x = torch.transpose(x, dim0 = 1, dim1 = 2)
         # Set the state to None - this way, RNN layer will autocreate the hidden state
         h = None
-        
-        steps = x.shape[1]
-        for i in range(steps - 1):
-            # Select a row, then add back one dimension to comply with RNN input [batch_size, 1, num_channels]
-            x_t = torch.unsqueeze(torch.select(x, dim = 1, index = i), dim = 1)
-            _, h = self.model(x_t, h)
-        # Transpose from [n_layers, batch_size, hidden_size] to [batch_size, n_layers, hidden_size]
-        h = torch.transpose(h, 0, 1)
-        # Remove the second dimension
-        h = torch.flatten(h, 1, 2)
-        # Because we only need the last output (many-to-one RNN), we only take output at the very end
-        y_pred = self.activation(h)
+        # Feed the data into the model
+        out, h = self.model(x, h)
+        # We are only interested in last output for each batch item, so we take that and discard the rest
+        out = torch.select(out, dim = 1, index = (out.shape[1] - 1))
+        # Pass the RNN output through the activation layer (fully connected layer + softmax)
+        y_pred = self.activation(out)
 
-        loss = self.loss_fn(y_pred, torch.argmax(y, dim = 1))
+        loss = self.loss_fn(y_pred, y)
 
         self.log('train_step_loss', loss)
         return loss
@@ -70,15 +64,12 @@ class RNNClassifier(pl.LightningModule):
         x = torch.transpose(x, dim0 = 1, dim1 = 2)
         h = None
 
-        steps = x.shape[1]
-        for i in range(steps - 1):
-            x_t = torch.unsqueeze(torch.select(x, dim = 1, index = i), dim = 1)
-            _, h = self.model(x_t, h)
-        h = torch.transpose(h, 0, 1)
-        h = torch.flatten(h, 1, 2)
-        y_pred = self.activation(h)
+        out, h = self.model(x, h)
+        out = torch.select(out, dim = 1, index = (out.shape[1] - 1))
+        y_pred = self.activation(out)
 
-        loss = self.loss_fn(y_pred, torch.argmax(y, dim = 1))
+        loss = self.loss_fn(y_pred, y)
+
         self.log('val_step_loss', loss)
         return loss
 
@@ -90,13 +81,8 @@ class RNNClassifier(pl.LightningModule):
         x = torch.transpose(x, dim0 = 1, dim1 = 2)
         h = None
 
-        steps = x.shape[1]
-        for i in range(steps - 1):
-            x_t = torch.unsqueeze(torch.select(x, dim = 1, index = i), dim = 1)
-            _, h = self.model(x_t, h)
-        h = torch.transpose(h, 0, 1)
-        h = torch.flatten(h, 1, 2)
-        y_pred = self.activation(h)
+        out, h = self.model(x, h)
+        y_pred = self.activation(out)
 
         # Transform y_pred from probabilities to actual prediction
         y_pred = torch.argmax(y_pred, dim = 1)

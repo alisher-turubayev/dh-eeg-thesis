@@ -71,6 +71,8 @@ checkpoints/
 # Logs directory
 logs/*
 logs
+lightning_logs
+lightning_logs/*
 # W&B integration artifacts
 wandb/*
 wandb
