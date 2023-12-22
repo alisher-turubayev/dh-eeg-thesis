@@ -22,6 +22,12 @@ def add_args(parser: argparse.ArgumentParser):
         type = float,
         help = 'PCA: Target CEV to select the number of components. See sklearn.decomposition.PCA for details'
     )
+    # ML Multiclass Strategy parameter
+    parser.add_argument(
+        '--multiclass_strategy',
+        choices = ['oao', 'oaa', 'native'],
+        help = 'Mutliclass classification strategy to use for ML models. \'oao\' stands for one-against-one, \'oaa\' stands for one-against-all. \'native\' strategy is used with XGBClassifier as it allows multiclass classification out-of-the-box'
+    )
     # SVM parameters
     parser.add_argument(
         '--svm_dual',
@@ -40,14 +46,9 @@ def add_args(parser: argparse.ArgumentParser):
     )
     # XGBoost parameters
     parser.add_argument(
-        '--xgb_eval_metric',
-        choices = ['auc', 'aucpr', 'merror'],
-        help = 'XGBoost: evaluation metric for XGBoost. See xgboost.XGBClassifier for details'
-    )
-    parser.add_argument(
-        '--xgb_objective',
-        choices = ['softmax', 'softprob'],
-        help = 'XGBoost: the loss function to minimize. See xgboost.XGBClassifier for details'
+        '--xgb_n_estimators',
+        type = int,
+        help = 'XGBoost: number of trees to train. See xgboost.XGBClassifier for details'
     )
     parser.add_argument(
         '--xgb_max_depth',
@@ -107,6 +108,7 @@ def validate_args(args: dict[str, any]):
     assert not ((args['model'] == 'svm' or args['model'] == 'xgboost') and ('raw' in args['dataset'])), 'Cannot use `raw` dataset with ML models'
     # Check that all parameters are present for SVM
     if args['model'] == 'svm':
+        assert args.get('multiclass_strategy') is not None, 'Multiclass strategy must be specified for SVM'
         assert args.get('pca_cev') is not None      \
             and args.get('pca_cev') >= 0.0          \
             and args.get('pca_cev') <= 1.0, 'The PCA CEV parameter must be between 0.0 and 1.0'
@@ -115,17 +117,17 @@ def validate_args(args: dict[str, any]):
             and args.get('svm_max_iter') is not None, 'Need to specify all SVM parameters'
     # Check that all parameters are present for XGBoost
     elif args['model'] == 'xgboost':
+        assert args.get('multiclass_strategy') is not None, 'Multiclass strategy must be specified for XGBClassifier'
         assert args.get('pca_cev') is not None      \
             and args.get('pca_cev') >= 0.0          \
             and args.get('pca_cev') <= 1.0, 'The PCA CEV parameter must be between 0.0 and 1.0'
-        assert args.get('xgb_eval_metric') is not None  \
-            and args.get('xgb_objective') is not None   \
+        assert args.get('xgb_n_estimators') is not None  \
             and args.get('xgb_max_depth') is not None   \
             and args.get('xgb_tree_method') is not None, 'Need to specify all XGBoost parameters'
     # Check that all parameters are present for RNN
     elif args['model'] == 'rnn':
         assert args.get('rnn_hidden_size') is not None \
-            and args.get('rnn_n_layers') is not None, 'Need to specify all XGBoost parameters'
+            and args.get('rnn_n_layers') is not None, 'Need to specify all RNN parameters'
     # Check that all parameters are present for CNN
     else:
         assert args.get('cnn_hidden_size') is not None          \
@@ -133,7 +135,7 @@ def validate_args(args: dict[str, any]):
             and args.get('cnn_stride') is not None              \
             and args.get('cnn_maxpool_kernel_size') is not None \
             and args.get('cnn_nn_size') is not None             \
-            and args.get('cnn_dropout_rate') is not None, 'Need to specify all XGBoost parameters'
+            and args.get('cnn_dropout_rate') is not None, 'Need to specify all CNN parameters'
 
 # Adapted from:
 # https://stackoverflow.com/a/65673016

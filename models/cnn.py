@@ -1,9 +1,12 @@
 import gin
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchmetrics.classification as mtr
 import pytorch_lightning as pl
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from utils import perclass_accuracy
+import wandb
 
 @gin.configurable('CNNClassifier')
 class CNNClassifier(pl.LightningModule):
@@ -12,14 +15,16 @@ class CNNClassifier(pl.LightningModule):
         input_size,
         output_size,
         window_datapoints,
-        hidden_size = gin.REQUIRED,
-        kernel_size = gin.REQUIRED,
-        stride = gin.REQUIRED,
-        maxpool_kernel_size = gin.REQUIRED,
-        nn_size = gin.REQUIRED,
-        dropout_rate = gin.REQUIRED
+        hidden_size,
+        kernel_size,
+        stride,
+        maxpool_kernel_size,
+        nn_size,
+        dropout_rate,
+        fold_idx
     ):
         super().__init__()
+        self.idx = fold_idx
         layers = []
 
         if window_datapoints is not None:
@@ -58,19 +63,7 @@ class CNNClassifier(pl.LightningModule):
         layers.append(nn.Softmax(dim = 1))
         
         self.model = nn.Sequential(*layers)
-        # Determine task 
-        if window_datapoints is None:
-            metrics_task = "binary"
-            self.loss_fn = F.binary_cross_entropy
-        else:
-            metrics_task = "multiclass"
-            self.loss_fn = F.cross_entropy
-
-        # Register metrics
-        self.acc = mtr.Accuracy(task = metrics_task, num_classes = output_size, average = 'macro')
-        self.prec = mtr.Precision(task = metrics_task, num_classes = output_size, average = 'macro')
-        self.recall = mtr.Recall(task = metrics_task, num_classes = output_size, average = 'macro')
-        self.f1score = mtr.F1Score(task = metrics_task, num_classes = output_size, average = 'macro')
+        self.loss_fn = F.cross_entropy
 
     def training_step(self, batch, _):
         x, y = batch
@@ -78,8 +71,8 @@ class CNNClassifier(pl.LightningModule):
         x = x.to(self.device)
         y = y.to(self.device)
 
-        pred_y = self.model(x)
-        loss = self.loss_fn(pred_y, y)
+        y_pred = self.model(x)
+        loss = self.loss_fn(y_pred, y)
 
         self.log('train_step_loss', loss)
         return loss
@@ -90,18 +83,11 @@ class CNNClassifier(pl.LightningModule):
         x = x.to(self.device)
         y = y.to(self.device)
         
-        pred_y = self.model(x)
-        loss = self.loss_fn(pred_y, y)
-        # Calculate accuracy on validation - we use this metric to early stop training
-        self.acc(pred_y, y)
+        y_pred = self.model(x)
+        loss = self.loss_fn(y_pred, y)
 
         self.log('val_step_loss', loss)
-        self.log('val_acc', self.acc, on_step = False, on_epoch = True)
         return loss
-    
-    def on_validation_end(self):
-        self.acc.reset()
-        return super().on_validation_end()
 
     def test_step(self, batch, _):
         x, y = batch
@@ -109,17 +95,20 @@ class CNNClassifier(pl.LightningModule):
         x = x.to(self.device)
         y = y.to(self.device)
 
-        pred_y = self.model(x)
+        y_pred = self.model(x)
+        y_pred = torch.argmax(y_pred, dim = 1)
+        y = torch.argmax(y, dim = 1)
         
-        # Update metrics of interest
-        self.prec(pred_y, y)
-        self.recall(pred_y, y)
-        self.f1score(pred_y, y)
-
-        # Log metrics
-        self.log('precision', self.prec)
-        self.log('recall', self.recall)
-        self.log('f1score', self.f1score)
+        wandb.log({
+            'fold_acc': accuracy_score(y, y_pred),
+            'fold_acc_class0': perclass_accuracy(y, y_pred, class_pos = 0),
+            'fold_acc_class1': perclass_accuracy(y, y_pred, class_pos = 1),
+            'fold_acc_class2': perclass_accuracy(y, y_pred, class_pos = 2),
+            'fold_acc_class3': perclass_accuracy(y, y_pred, class_pos = 3),
+            'fold_precision': precision_score(y, y_pred, average = 'micro'),
+            'fold_recall': recall_score(y, y_pred, average = 'micro'),
+            'fold_f1_score': f1_score(y, y_pred, average = 'micro')
+        })
 
     def configure_optimizers(self):
         return optim.Adam(self.model.parameters(), lr = 0.001, weight_decay = 0.01)

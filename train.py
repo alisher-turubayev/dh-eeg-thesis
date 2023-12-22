@@ -10,15 +10,14 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold, cross_validate
 from sklearn.multiclass import OneVsOneClassifier
 from sklearn.svm import LinearSVC
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.pipeline import Pipeline
 
 import torch
-from torch.utils.data import SubsetRandomSampler, DataLoader, random_split
+from torch.utils.data import SubsetRandomSampler, DataLoader
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.callbacks import EarlyStopping
 
 from models.cnn import CNNClassifier
 from models.rnn import RNNClassifier
@@ -51,16 +50,9 @@ def train_test_loop(dataset, model_name, epochs, rng, cv_folds, cv_repetitions, 
     # Window size is # of datapoints per sample
     window_datapoints = data_shape[1]
 
-    print(f'debug: input size {input_size}, {output_size}, {window_datapoints}')
     # Get non-one-hot encoded labels for StratifiedKFold
     labels_strat = dataset.get_strat_labels()
-    # Make a split of the dataset
-    train_val_idx, test_idx = train_test_split(range(len(dataset)), random_state = rng, test_size = 0.2, stratify = labels_strat)
-
-    # Initialize dataloader for the test indicies
-    test_loader = DataLoader(dataset, batch_size = len(test_idx), sampler = SubsetRandomSampler(test_idx), num_workers = min(os.cpu_count(), 4))
-
-    train_val_labels = np.take(labels_strat, train_val_idx)
+    
     # Initialize RepeatedStatifiedKFold
     skf = RepeatedStratifiedKFold(n_splits = cv_folds, n_repeats = cv_repetitions, random_state = rng)
 
@@ -74,14 +66,19 @@ def train_test_loop(dataset, model_name, epochs, rng, cv_folds, cv_repetitions, 
     )
 
     # Start the cross-validation
-    for i, (train_idx, val_idx) in enumerate(skf.split(np.zeros(len(train_val_labels)), train_val_labels)):
+    for i, (train_val_idx, test_idx) in enumerate(skf.split(np.zeros(len(dataset)), range(len(dataset)), groups = labels_strat)):
+        # Initialize dataloader for the test indicies
+        test_loader = DataLoader(dataset, batch_size = len(test_idx), sampler = SubsetRandomSampler(test_idx), num_workers = min(os.cpu_count(), 4))
+        # Make a split for train/val indicies
+        train_idx, val_idx = train_test_split(range(len(dataset)), random_state = rng, test_size = 0.2, stratify = np.take(labels_strat, train_val_idx))
+    
         # Initialize train/val loaders
         train_loader = DataLoader(dataset, batch_size = 4, sampler = SubsetRandomSampler(train_idx), num_workers = min(os.cpu_count(), 4))
         val_loader = DataLoader(dataset, batch_size = 4, sampler = SubsetRandomSampler(val_idx), num_workers = min(os.cpu_count(), 4))
 
         # Initialize the model
         if model_name == 'cnn':
-            model = CNNClassifier(input_size, output_size, window_datapoints)
+            model = CNNClassifier(input_size, output_size, window_datapoints, args['cnn_hidden_size'], args['cnn_kernel_size'], args['cnn_stride'], args['maxpool_kernel_size'], args['cnn_nn_size'], args['dropout_rate'], i)
         else: 
             model = RNNClassifier(input_size, output_size, window_datapoints, args['rnn_hidden_size'], args['rnn_n_layers'], i)
 
@@ -130,31 +127,59 @@ def fit(dataset, model_name, rng, cv_folds, cv_repetitions, logger, args):
         ('scaling', StandardScaler()),
         ('reduce_dim', PCA(n_components = wandb.config['pca_cev'], random_state = rng)),
     ]
+    
     if model_name == 'svm':
-        pipeline_params.append((
-            'model', 
-            OneVsOneClassifier(
+        if wandb.config['multiclass_strategy'] == 'oaa':
+            pipeline_params.append((
+                'model', 
                 LinearSVC(
                     dual = wandb.config['svm_dual'],
                     C = wandb.config['svm_C'],
                     max_iter = wandb.config['svm_max_iter'],
+                    multi_class = 'ovr',
                     random_state = rng
                 )
-            )
-        ))
+            ))
+        else:
+            pipeline_params.append((
+                'model', 
+                OneVsOneClassifier(
+                    LinearSVC(
+                        dual = wandb.config['svm_dual'],
+                        C = wandb.config['svm_C'],
+                        max_iter = wandb.config['svm_max_iter'],
+                        random_state = rng
+                    )
+                )
+            ))
     else:
-        pipeline_params.append((
-            'model', 
-            OneVsOneClassifier(
+        # In the case of xgboost, we don't have explicit ovr support
+        # Thus, we need to use objective as a determinant of whether to train with OAO or not
+        if wandb.config['multiclass_strategy'] == 'oao':
+            pipeline_params.append((
+                'model', 
+                OneVsOneClassifier(
+                    xgb.XGBClassifier(
+                        n_estimators = wandb.config['xgb_n_estimators'],
+                        max_depth = wandb.config['xgb_max_depth'],
+                        tree_method = wandb.config['xgb_tree_method'],
+                        random_state = rng
+                    )
+                )
+            ))
+        else:
+            pipeline_params.append((
+                'model', 
                 xgb.XGBClassifier(
-                    eval_metric = wandb.config['xgb_eval_metric'],
-                    objective = wandb.config['xgb_objective'],
+                    n_estimators = wandb.config['xgb_n_estimators'],
                     max_depth = wandb.config['xgb_max_depth'],
                     tree_method = wandb.config['xgb_tree_method'],
                     random_state = rng
                 )
-            )
-        ))
+            ))
+        lbl = LabelEncoder()
+        y = lbl.fit_transform(y)
+
     pipe = Pipeline(pipeline_params)
     # Define metrics of interest
     scoring = {
