@@ -65,6 +65,8 @@ $RECYCLE.BIN/
 # Data (data is meant to be downloaded separately)
 data/*
 data
+export/
+export
 # Checkpoints (model checkpoints don't need to be version-controlled)
 checkpoints/*
 checkpoints/
